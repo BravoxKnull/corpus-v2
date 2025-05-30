@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Corpus v2 - Landing Page</title>
+  <title>Voicecord - Channels</title>
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
@@ -176,27 +176,26 @@
     }
   </style>
 </head>
-<body>
+<body class="discord-bg">
   <div class="sidebar">
     <div class="sidebar-header">
-      <div class="logo">CV2</div>
+      <span class="material-icons logo-icon">headset_mic</span>
+      <span class="logo-text">Voicecord</span>
     </div>
-    <div class="channels-list" id="channels-list">
-      <!-- Channels will be listed here -->
-    </div>
+    <div class="channels-list" id="channels-list"></div>
     <div class="create-channel">
       <input type="text" id="new-channel-name" placeholder="New channel name" />
-      <button id="create-channel-btn">+</button>
+      <button id="create-channel-btn"><span class="material-icons">add</span></button>
     </div>
-    <div class="sidebar-footer">&copy; 2024 Corpus v2</div>
+    <div class="sidebar-footer">&copy; 2024 Voicecord</div>
   </div>
   <div class="main-content">
     <div class="main-header" id="current-channel">Select a channel</div>
     <div class="voice-section">
-      <section id="voiceRoom" class="card" style="width: 100%; max-width: 500px;">
-        <h2 style="margin-bottom: 18px;">Voice Channel: <span id="currentChannelName"></span></h2>
+      <section id="voiceRoom" class="card">
+        <h2>Voice Channel: <span id="currentChannelName"></span></h2>
         <div id="participants" class="participants"></div>
-        <div class="controls" style="margin-top: 24px;">
+        <div class="controls">
           <button id="micToggle" class="icon-btn" aria-label="Toggle Mic">
             <span id="micIcon" class="material-icons">mic</span>
           </button>

@@ -1,6 +1,6 @@
 // --- Supabase Auth & User Info ---
-const SUPABASE_URL = 'https://tlhzsssflsljvvzfyapc.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsaHpzc3NmbHNsanZ2emZ5YXBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2MDYzOTYsImV4cCI6MjA2NDE4MjM5Nn0.-_Pp6zG2v7RiP_0m_pQOEJyAJPn5Zo4yPGCHHJH0IO0';
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let currentUser = null;
@@ -93,7 +93,6 @@ function joinChannel(channelId, channelName) {
   currentChannelHeader.textContent = `# ${channelName}`;
   currentChannelNameSpan.textContent = channelName;
   participantsDiv.innerHTML = '';
-  // Leave all peer connections
   for (const id in peers) { peers[id].destroy(); delete peers[id]; delete peerStreams[id]; }
   if (localStream) {
     localStream.getTracks().forEach(track => track.stop());
@@ -123,7 +122,7 @@ socket.on('participants', ({ participants }) => {
   participants.forEach(({ socketId, displayName }) => {
     addParticipant(socketId, displayName);
     if (socketId !== socket.id && !peers[socketId]) {
-      connectToNewUser(socketId, displayName, true); // always initiator
+      connectToNewUser(socketId, displayName, true);
     }
   });
   if (!localStream) startVoice();
@@ -133,7 +132,7 @@ socket.on('user-joined', ({ socketId, displayName }) => {
   addParticipant(socketId, displayName, true);
   showToast(`${displayName} joined the channel`);
   if (socketId !== socket.id && !peers[socketId]) {
-    connectToNewUser(socketId, displayName, false); // always non-initiator
+    connectToNewUser(socketId, displayName, false);
   }
 });
 
@@ -151,7 +150,6 @@ function addParticipant(socketId, displayName, animate = false) {
   const div = document.createElement('div');
   div.id = 'p-' + socketId;
   div.className = animate ? 'participant-join-animate' : '';
-  // Active speaker indicator
   const activeCircle = document.createElement('span');
   activeCircle.className = 'active-speaker';
   activeCircle.style.visibility = 'hidden';
@@ -173,14 +171,12 @@ async function startVoice() {
       setTimeout(() => micIcon.classList.remove('mic-animate'), 400);
       showToast(enabled ? 'Microphone enabled' : 'Microphone muted');
     };
-    // Audio activity detection for local user
     detectSpeaking(localStream, socket.id);
   } catch (err) {
     showModal('Microphone access denied!');
   }
 }
 
-// --- Audio Activity Detection ---
 function detectSpeaking(stream, socketId) {
   const audioContext = new (window.AudioContext || window.webkitAudioContext)();
   const analyser = audioContext.createAnalyser();
@@ -202,7 +198,7 @@ function detectSpeaking(stream, socketId) {
 
 socket.on('signal', ({ id, signal }) => {
   if (!peers[id]) {
-    connectToNewUser(id, '', false); // always non-initiator
+    connectToNewUser(id, '', false);
   }
   if (peers[id]) {
     try {
@@ -214,7 +210,7 @@ socket.on('signal', ({ id, signal }) => {
 });
 
 function connectToNewUser(id, displayName, initiator) {
-  if (peers[id]) return; // Prevent duplicate
+  if (peers[id]) return;
   const peer = new SimplePeer({
     initiator,
     trickle: false,
@@ -256,16 +252,13 @@ function connectToNewUser(id, displayName, initiator) {
   peers[id] = peer;
 }
 
-// --- Logout ---
 logoutBtn.onclick = async () => {
   await supabase.auth.signOut();
   window.location.href = 'index.html';
 };
 
-// --- Error Handling ---
 socket.on('error', (err) => {
   showModal(err.message || 'An error occurred');
 });
 
-// --- Init ---
 checkAuthAndInit();
