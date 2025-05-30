@@ -3,53 +3,175 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Corpus v2 - Voice Chat</title>
+  <title>Login / Signup - Corpus v2</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+  <style>
+    body { display: flex; min-height: 100vh; }
+    .sidebar {
+      background: #23272a;
+      color: #fff;
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 2px 0 12px rgba(0,0,0,0.12);
+    }
+    .sidebar .logo {
+      font-size: 2.2rem;
+      font-weight: bold;
+      color: #00e6a8;
+      margin-bottom: 12px;
+      letter-spacing: 2px;
+    }
+    .sidebar h1 {
+      font-size: 1.3rem;
+      font-weight: 400;
+      margin: 0 0 24px 0;
+      color: #fff;
+    }
+    .main-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #232526 0%, #414345 100%);
+    }
+    .auth-card {
+      background: #2c2f33;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+      padding: 40px 32px 32px 32px;
+      min-width: 340px;
+      max-width: 90vw;
+      color: #fff;
+    }
+    .auth-card h2 { margin-bottom: 18px; }
+    .auth-card input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      border: none;
+      background: #23272a;
+      color: #fff;
+      font-size: 1rem;
+    }
+    .auth-card button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: none;
+      background: #00e6a8;
+      color: #181a1b;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: background 0.2s;
+    }
+    .auth-card button:hover { background: #00b386; }
+    .auth-toggle { color: #aaa; text-align: center; margin-top: 10px; cursor: pointer; }
+    .error-msg { color: #ff4d4f; margin-bottom: 10px; text-align: center; }
+    @media (max-width: 700px) {
+      .sidebar { display: none; }
+      .main-content { flex: 1; }
+      .auth-card { min-width: 90vw; }
+    }
+  </style>
 </head>
 <body>
-  <main>
-    <section class="card" style="margin-top: 80px; min-width: 320px;">
-      <div class="logo" style="margin-bottom: 24px;">Corpus v2</div>
-      <h2>Sign in to Continue</h2>
-      <button id="google-login" class="primary" style="margin-top: 32px;">
-        <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style="height: 20px; vertical-align: middle; margin-right: 8px;"> Continue with Google
-      </button>
-    </section>
-  </main>
-  <div id="toast" class="toast" style="display:none;"></div>
+  <div class="sidebar">
+    <div class="logo">Corpus v2</div>
+    <h1>Welcome to Voice Chat</h1>
+    <div style="font-size: 1.1rem; color: #aaa;">Connect, create channels, and chat like Discord!</div>
+  </div>
+  <div class="main-content">
+    <div class="auth-card">
+      <h2 id="form-title">Login</h2>
+      <div class="error-msg" id="error-msg"></div>
+      <form id="login-form">
+        <input type="text" id="login-username" placeholder="Username or Email" required />
+        <input type="password" id="login-password" placeholder="Password" required />
+        <button type="submit">Login</button>
+      </form>
+      <form id="signup-form" style="display:none;">
+        <input type="text" id="signup-username" placeholder="Username (for login)" required />
+        <input type="text" id="signup-displayname" placeholder="Display Name" required />
+        <input type="email" id="signup-email" placeholder="Email" required />
+        <input type="password" id="signup-password" placeholder="Password" required />
+        <button type="submit">Sign Up</button>
+      </form>
+      <div class="auth-toggle" id="toggle-auth">Don't have an account? Sign up</div>
+    </div>
+  </div>
   <script>
-    // Initialize Supabase
     const SUPABASE_URL = 'https://tlhzsssflsljvvzfyapc.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsaHpzc3NmbHNsanZ2emZ5YXBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2MDYzOTYsImV4cCI6MjA2NDE4MjM5Nn0.-_Pp6zG2v7RiP_0m_pQOEJyAJPn5Zo4yPGCHHJH0IO0';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    const toast = document.getElementById('toast');
-    function showToast(message, duration = 3000) {
-      toast.textContent = message;
-      toast.style.display = 'block';
-      setTimeout(() => { toast.style.display = 'none'; }, duration);
-    }
-
-    document.getElementById('google-login').onclick = async () => {
-      const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    const toggleAuth = document.getElementById('toggle-auth');
+    const formTitle = document.getElementById('form-title');
+    const errorMsg = document.getElementById('error-msg');
+    let isLogin = true;
+    toggleAuth.onclick = () => {
+      isLogin = !isLogin;
+      loginForm.style.display = isLogin ? '' : 'none';
+      signupForm.style.display = isLogin ? 'none' : '';
+      formTitle.textContent = isLogin ? 'Login' : 'Sign Up';
+      toggleAuth.textContent = isLogin ? "Don't have an account? Sign up" : 'Already have an account? Login';
+      errorMsg.textContent = '';
+    };
+    loginForm.onsubmit = async (e) => {
+      e.preventDefault();
+      errorMsg.textContent = '';
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      // Try login with email or username
+      let { data, error } = await supabase.auth.signInWithPassword({ email: username, password });
       if (error) {
-        showToast('Login failed: ' + error.message);
+        // Try username as custom field
+        const { data: userData } = await supabase.from('users').select('email').eq('username', username).single();
+        if (userData && userData.email) {
+          ({ data, error } = await supabase.auth.signInWithPassword({ email: userData.email, password }));
+        }
+      }
+      if (error) {
+        errorMsg.textContent = error.message;
+      } else {
+        window.location.href = 'landingpage.html';
       }
     };
-
-    // Handle redirect after login
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session && session.user) {
-        // Store user in DB (if new)
-        const { user } = session;
+    signupForm.onsubmit = async (e) => {
+      e.preventDefault();
+      errorMsg.textContent = '';
+      const username = document.getElementById('signup-username').value.trim();
+      const displayName = document.getElementById('signup-displayname').value.trim();
+      const email = document.getElementById('signup-email').value.trim();
+      const password = document.getElementById('signup-password').value;
+      // Register user
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { display_name: displayName, username } } });
+      if (error) {
+        errorMsg.textContent = error.message;
+      } else {
+        // Store user in users table
+        const user = data.user;
         await supabase.from('users').upsert({
           id: user.id,
-          email: user.email,
-          name: user.user_metadata.full_name,
+          email,
+          username,
+          display_name: displayName,
           last_login: new Date().toISOString()
         });
-        window.location.href = 'login.html'; // This will be swapped in login.html
+        window.location.href = 'landingpage.html';
+      }
+    };
+    // If already logged in, redirect
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session && session.user) {
+        window.location.href = 'landingpage.html';
       }
     });
   </script>

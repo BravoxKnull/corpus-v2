@@ -17,57 +17,120 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.static(path.join(__dirname, '../client')));
 
-// In-memory user store
-const users = {};
+// In-memory stores
+const users = {}; // { socketId: { id, username, displayName, channelId } }
+const channels = {}; // { channelId: { name, users: Set<socketId> } }
+let channelAutoId = 1;
 
 // Helper: log with timestamp
 function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
-// Helper: sanitize name
-function sanitizeName(name) {
+// Helper: sanitize channel name
+function sanitizeChannelName(name) {
   return String(name).replace(/[^\w\s\-]/g, '').trim().slice(0, 32);
+}
+
+// Helper: get public channel info
+function getChannelsList() {
+  return Object.entries(channels).map(([id, ch]) => ({ id, name: ch.name, userCount: ch.users.size }));
 }
 
 io.on('connection', (socket) => {
   log(`Client connected: ${socket.id}`);
 
-  socket.on('join-channel', ({ name }) => {
-    try {
-      const cleanName = sanitizeName(name) || 'Anonymous';
-      // Prevent duplicate names
-      if (Object.values(users).includes(cleanName)) {
-        socket.emit('error', { message: 'Name already taken. Choose another.' });
-        return;
-      }
-      users[socket.id] = cleanName;
-      socket.broadcast.emit('user-joined', { id: socket.id, name: cleanName });
-      socket.emit('all-users', { users });
-      log(`User joined: ${cleanName} (${socket.id})`);
-    } catch (err) {
-      log(`Error in join-channel: ${err.message}`);
-      socket.emit('error', { message: 'Failed to join channel.' });
+  // Send current channels list
+  socket.emit('channels-list', getChannelsList());
+
+  // Handle user registration (from client after auth)
+  socket.on('register-user', ({ id, username, displayName }) => {
+    users[socket.id] = { id, username, displayName, channelId: null };
+    log(`User registered: ${username} (${socket.id})`);
+    socket.emit('channels-list', getChannelsList());
+  });
+
+  // Create a new channel
+  socket.on('create-channel', ({ name }) => {
+    const cleanName = sanitizeChannelName(name);
+    if (!cleanName) {
+      socket.emit('error', { message: 'Invalid channel name.' });
+      return;
+    }
+    // Prevent duplicate names
+    if (Object.values(channels).some(ch => ch.name === cleanName)) {
+      socket.emit('error', { message: 'Channel name already exists.' });
+      return;
+    }
+    const channelId = String(channelAutoId++);
+    channels[channelId] = { name: cleanName, users: new Set() };
+    io.emit('channels-list', getChannelsList());
+    log(`Channel created: ${cleanName} (${channelId})`);
+  });
+
+  // Join a channel
+  socket.on('join-channel', ({ channelId }) => {
+    const user = users[socket.id];
+    if (!user) return;
+    // Leave previous channel
+    if (user.channelId && channels[user.channelId]) {
+      channels[user.channelId].users.delete(socket.id);
+      io.to(user.channelId).emit('user-left', { socketId: socket.id });
+      socket.leave(user.channelId);
+    }
+    // Join new channel
+    if (!channels[channelId]) {
+      socket.emit('error', { message: 'Channel does not exist.' });
+      return;
+    }
+    user.channelId = channelId;
+    channels[channelId].users.add(socket.id);
+    socket.join(channelId);
+    // Notify users in channel
+    io.to(channelId).emit('user-joined', { socketId: socket.id, username: user.username, displayName: user.displayName });
+    // Send current participants
+    const participants = Array.from(channels[channelId].users).map(sid => {
+      const u = users[sid];
+      return u ? { socketId: sid, username: u.username, displayName: u.displayName } : null;
+    }).filter(Boolean);
+    socket.emit('participants', { participants });
+    log(`User ${user.username} joined channel ${channels[channelId].name}`);
+  });
+
+  // Leave channel
+  socket.on('leave-channel', () => {
+    const user = users[socket.id];
+    if (user && user.channelId && channels[user.channelId]) {
+      channels[user.channelId].users.delete(socket.id);
+      io.to(user.channelId).emit('user-left', { socketId: socket.id });
+      socket.leave(user.channelId);
+      user.channelId = null;
+      log(`User ${user.username} left channel`);
     }
   });
 
+  // WebRTC signaling (per channel)
   socket.on('signal', ({ targetId, signal }) => {
-    try {
-      if (!targetId || !signal) return;
-      io.to(targetId).emit('signal', { id: socket.id, signal });
-    } catch (err) {
-      log(`Error in signal: ${err.message}`);
+    const user = users[socket.id];
+    if (!user || !user.channelId) return;
+    if (!channels[user.channelId] || !channels[user.channelId].users.has(targetId)) return;
+    io.to(targetId).emit('signal', { id: socket.id, signal });
+  });
+
+  // Disconnect
+  socket.on('disconnect', () => {
+    const user = users[socket.id];
+    if (user) {
+      if (user.channelId && channels[user.channelId]) {
+        channels[user.channelId].users.delete(socket.id);
+        io.to(user.channelId).emit('user-left', { socketId: socket.id });
+      }
+      delete users[socket.id];
+      log(`Client disconnected: ${socket.id}`);
     }
   });
 
-  socket.on('disconnect', () => {
-    const name = users[socket.id];
-    socket.broadcast.emit('user-left', socket.id);
-    delete users[socket.id];
-    log(`Client disconnected: ${socket.id} (${name})`);
-  });
-
-  // Handle custom errors
+  // Error handler
   socket.on('error', (err) => {
     log(`Socket error: ${err.message || err}`);
   });
