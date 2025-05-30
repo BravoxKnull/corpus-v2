@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Corpus v2 - Voice Chat</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>DUNE PC</h1>
+
+  <div id="nameSelection">
+    <h2>Select Your Name</h2>
+    <select id="nameSelect">
+      <option value="BLAZEE HACK">BLAZEE HACK</option>
+      <option value="VELOZZZ HACK">VELOZZZ HACK</option>
+      <option value="FLAMEE HACK">FLAMEE HACK</option>
+      <option value="STEIKEE HACK">STEIKEE HACK</option>
+      <option value="RONINN HACK">RONINN HACK</option>
+    </select>
+    <button onclick="joinChannel()">Join Channel</button>
+  </div>
+
+  <div id="voiceRoom" style="display:none;">
+    <h2>You are in: <span id="currentUser"></span></h2>
+    <div id="participants"></div>
+    <button id="micToggle">Toggle Mic</button>
+    <button onclick="leave()">Leave</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
