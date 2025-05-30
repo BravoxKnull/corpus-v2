@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Corpus v2 - Landing Page</title>
   <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
   <style>
     body { display: flex; min-height: 100vh; background: #23272a; }
@@ -196,7 +197,9 @@
         <h2 style="margin-bottom: 18px;">Voice Channel: <span id="currentChannelName"></span></h2>
         <div id="participants" class="participants"></div>
         <div class="controls" style="margin-top: 24px;">
-          <button id="micToggle" class="secondary">Toggle Mic</button>
+          <button id="micToggle" class="icon-btn" aria-label="Toggle Mic">
+            <span id="micIcon" class="material-icons">mic</span>
+          </button>
           <button class="danger" onclick="leaveChannel()">Leave Channel</button>
         </div>
       </section>

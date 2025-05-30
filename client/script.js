@@ -127,7 +127,7 @@ socket.on('participants', ({ participants }) => {
 });
 
 socket.on('user-joined', ({ socketId, displayName }) => {
-  addParticipant(socketId, displayName);
+  addParticipant(socketId, displayName, true);
   showToast(`${displayName} joined the channel`);
 });
 
@@ -135,11 +135,18 @@ socket.on('user-left', ({ socketId }) => {
   document.getElementById('p-' + socketId)?.remove();
 });
 
-function addParticipant(socketId, displayName) {
+function addParticipant(socketId, displayName, animate = false) {
   if (document.getElementById('p-' + socketId)) return;
   const div = document.createElement('div');
   div.id = 'p-' + socketId;
-  div.textContent = displayName;
+  div.className = animate ? 'participant-join-animate' : '';
+  // Active speaker indicator
+  const activeCircle = document.createElement('span');
+  activeCircle.className = 'active-speaker';
+  activeCircle.style.visibility = 'hidden';
+  activeCircle.id = 'active-' + socketId;
+  div.appendChild(activeCircle);
+  div.appendChild(document.createTextNode(displayName));
   participantsDiv.appendChild(div);
 }
 
@@ -148,7 +155,11 @@ async function startVoice() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     micToggle.onclick = () => {
+      const micIcon = document.getElementById('micIcon');
       const enabled = localStream.getAudioTracks()[0].enabled = !localStream.getAudioTracks()[0].enabled;
+      micIcon.textContent = enabled ? 'mic' : 'mic_off';
+      micIcon.classList.add('mic-animate');
+      setTimeout(() => micIcon.classList.remove('mic-animate'), 400);
       showToast(enabled ? 'Microphone enabled' : 'Microphone muted');
     };
     // Connect to all participants
@@ -159,14 +170,40 @@ async function startVoice() {
         }
       });
     });
+    // Audio activity detection for local user
+    detectSpeaking(localStream, socket.id);
   } catch (err) {
     showModal('Microphone access denied!');
   }
 }
 
+// --- Audio Activity Detection ---
+function detectSpeaking(stream, socketId) {
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const analyser = audioContext.createAnalyser();
+  const source = audioContext.createMediaStreamSource(stream);
+  source.connect(analyser);
+  analyser.fftSize = 512;
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+  function checkSpeaking() {
+    analyser.getByteFrequencyData(dataArray);
+    const volume = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+    const activeCircle = document.getElementById('active-' + socketId);
+    if (activeCircle) {
+      activeCircle.style.visibility = (volume > 15 && stream.getAudioTracks()[0].enabled) ? 'visible' : 'hidden';
+    }
+    requestAnimationFrame(checkSpeaking);
+  }
+  checkSpeaking();
+}
+
 socket.on('signal', ({ id, signal }) => {
   if (peers[id]) {
     peers[id].signal(signal);
+  } else {
+    // If peer not found, create as non-initiator
+    connectToNewUser(id, '', false);
+    setTimeout(() => peers[id]?.signal(signal), 100);
   }
 });
 
@@ -189,6 +226,8 @@ function connectToNewUser(id, displayName, initiator) {
       document.getElementById('p-' + id)?.appendChild(audio);
     }
     audio.srcObject = stream;
+    // Detect speaking for remote user
+    detectSpeaking(stream, id);
   });
   peer.on('error', err => {
     showModal('Connection error: ' + err.message);
