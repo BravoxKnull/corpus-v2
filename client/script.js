@@ -129,11 +129,12 @@ async function checkAuthAndInit() {
     currentUser = userData;
     if (userDisplayName) userDisplayName.textContent = userData.display_name;
     if (userAvatar) userAvatar.textContent = userData.display_name ? userData.display_name[0].toUpperCase() : 'U';
+    
     // Register user with server
     socket.emit('register-user', {
         id: userData.id,
         username: userData.username,
-        displayName: userData.display_name
+        displayName: userData.display_name || userData.username || 'User'
     });
 }
 
@@ -181,7 +182,20 @@ function joinChannel(channelId, channelName) {
     currentChannelId = channelId;
     
     if (currentChannelHeader) {
-        currentChannelHeader.textContent = `# ${channelName}`;
+        currentChannelHeader.innerHTML = `
+            <div class="channel-header">
+                <span># ${channelName}</span>
+                <button id="leaveChannelBtn" class="btn btn-danger">
+                    <span class="material-icons">exit_to_app</span>
+                </button>
+            </div>
+        `;
+        
+        // Add event listener to the leave button
+        const leaveBtn = document.getElementById('leaveChannelBtn');
+        if (leaveBtn) {
+            leaveBtn.onclick = leaveChannel;
+        }
     }
     
     if (currentChannelNameSpan) {
@@ -584,3 +598,33 @@ document.addEventListener('DOMContentLoaded', () => {
 socket.on('error', (err) => {
     showModal(err.message || 'An error occurred');
 });
+
+// Add this CSS to your style.css file
+const style = document.createElement('style');
+style.textContent = `
+    .channel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+    }
+    
+    .btn-danger {
+        background-color: #ff4d4f;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    .btn-danger:hover {
+        background-color: #ff7875;
+    }
+    
+    .btn-danger .material-icons {
+        font-size: 18px;
+    }
+`;
+document.head.appendChild(style);

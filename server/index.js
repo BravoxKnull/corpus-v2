@@ -71,8 +71,12 @@ io.on('connection', (socket) => {
   // Handle user registration
   socket.on('register-user', (userData) => {
     const { id, username, displayName } = userData;
+    if (!displayName) {
+        console.error('No display name provided for user:', id);
+        return;
+    }
     users.set(socket.id, { id, username, displayName });
-    log(`User registered: ${displayName} (${socket.id})`);
+    console.log(`User registered: ${displayName} (${socket.id})`);
   });
 
   // Handle channel creation
@@ -127,7 +131,7 @@ io.on('connection', (socket) => {
   // Handle joining channel
   socket.on('join-channel', ({ channelId }) => {
     try {
-      console.log(`User ${socket.id} attempting to join channel ${channelId}`); // Debug log
+      console.log(`User ${socket.id} attempting to join channel ${channelId}`);
       
       const channel = channels.get(channelId);
       if (!channel) {
@@ -162,28 +166,34 @@ io.on('connection', (socket) => {
 
       // Get user info
       const user = users.get(socket.id);
-      const displayName = user ? user.displayName : 'Unknown User';
+      if (!user || !user.displayName) {
+        console.error('User not properly registered:', socket.id);
+        throw new Error('User not properly registered');
+      }
 
       // Notify others in channel
       socket.to(channelId).emit('user-joined', {
         socketId: socket.id,
-        displayName: displayName
+        displayName: user.displayName
       });
 
       // Send current participants to new user
       const participants = Array.from(channel.users)
         .filter(id => id !== socket.id)
-        .map(id => ({
-          socketId: id,
-          displayName: users.get(id)?.displayName || 'Unknown User'
-        }));
+        .map(id => {
+          const participant = users.get(id);
+          return {
+            socketId: id,
+            displayName: participant ? participant.displayName : 'Unknown User'
+          };
+        });
 
       socket.emit('participants', { participants });
       
       // Broadcast updated channel list
       broadcastChannelList();
 
-      console.log(`User ${socket.id} joined channel ${channelId}`); // Debug log
+      console.log(`User ${user.displayName} (${socket.id}) joined channel ${channelId}`);
     } catch (error) {
       console.error(`Channel join error for ${socket.id}:`, error);
       socket.emit('channel-error', { message: error.message });
