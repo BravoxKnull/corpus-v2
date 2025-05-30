@@ -7,6 +7,7 @@ let currentUser = null;
 let currentChannelId = null;
 let localStream = null;
 let peers = {};
+let peerStreams = {};
 
 const socket = io();
 
@@ -93,7 +94,7 @@ function joinChannel(channelId, channelName) {
   currentChannelNameSpan.textContent = channelName;
   participantsDiv.innerHTML = '';
   // Leave all peer connections
-  for (const id in peers) { peers[id].destroy(); delete peers[id]; }
+  for (const id in peers) { peers[id].destroy(); delete peers[id]; delete peerStreams[id]; }
   if (localStream) {
     localStream.getTracks().forEach(track => track.stop());
     localStream = null;
@@ -106,7 +107,7 @@ function leaveChannel() {
   currentChannelHeader.textContent = 'Select a channel';
   currentChannelNameSpan.textContent = '';
   participantsDiv.innerHTML = '';
-  for (const id in peers) { peers[id].destroy(); delete peers[id]; }
+  for (const id in peers) { peers[id].destroy(); delete peers[id]; delete peerStreams[id]; }
   if (localStream) {
     localStream.getTracks().forEach(track => track.stop());
     localStream = null;
@@ -121,6 +122,9 @@ socket.on('participants', ({ participants }) => {
   participantsDiv.innerHTML = '';
   participants.forEach(({ socketId, displayName }) => {
     addParticipant(socketId, displayName);
+    if (socketId !== socket.id && !peers[socketId]) {
+      connectToNewUser(socketId, displayName, true);
+    }
   });
   // Start voice if not already
   if (!localStream) startVoice();
@@ -129,10 +133,19 @@ socket.on('participants', ({ participants }) => {
 socket.on('user-joined', ({ socketId, displayName }) => {
   addParticipant(socketId, displayName, true);
   showToast(`${displayName} joined the channel`);
+  // Create peer connection as non-initiator for the new user
+  if (socketId !== socket.id && !peers[socketId]) {
+    connectToNewUser(socketId, displayName, false);
+  }
 });
 
 socket.on('user-left', ({ socketId }) => {
   document.getElementById('p-' + socketId)?.remove();
+  if (peers[socketId]) {
+    peers[socketId].destroy();
+    delete peers[socketId];
+    delete peerStreams[socketId];
+  }
 });
 
 function addParticipant(socketId, displayName, animate = false) {
@@ -162,14 +175,6 @@ async function startVoice() {
       setTimeout(() => micIcon.classList.remove('mic-animate'), 400);
       showToast(enabled ? 'Microphone enabled' : 'Microphone muted');
     };
-    // Connect to all participants
-    socket.on('participants', ({ participants }) => {
-      participants.forEach(({ socketId, displayName }) => {
-        if (socketId !== socket.id && !peers[socketId]) {
-          connectToNewUser(socketId, displayName, true);
-        }
-      });
-    });
     // Audio activity detection for local user
     detectSpeaking(localStream, socket.id);
   } catch (err) {
@@ -198,16 +203,17 @@ function detectSpeaking(stream, socketId) {
 }
 
 socket.on('signal', ({ id, signal }) => {
-  if (peers[id]) {
-    peers[id].signal(signal);
-  } else {
+  if (!peers[id]) {
     // If peer not found, create as non-initiator
     connectToNewUser(id, '', false);
-    setTimeout(() => peers[id]?.signal(signal), 100);
   }
+  setTimeout(() => {
+    if (peers[id]) peers[id].signal(signal);
+  }, 50);
 });
 
 function connectToNewUser(id, displayName, initiator) {
+  if (peers[id]) return; // Prevent duplicate
   const peer = new SimplePeer({
     initiator,
     trickle: false,
@@ -226,8 +232,15 @@ function connectToNewUser(id, displayName, initiator) {
       document.getElementById('p-' + id)?.appendChild(audio);
     }
     audio.srcObject = stream;
+    peerStreams[id] = stream;
     // Detect speaking for remote user
     detectSpeaking(stream, id);
+  });
+  peer.on('close', () => {
+    let audio = document.getElementById('audio-' + id);
+    if (audio) audio.remove();
+    delete peers[id];
+    delete peerStreams[id];
   });
   peer.on('error', err => {
     showModal('Connection error: ' + err.message);
