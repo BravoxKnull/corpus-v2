@@ -1,17 +1,18 @@
 {
   "name": "corpus-v2",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Discord-style voice chat app with Supabase integration",
+  "main": "server/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server/index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.8",
-    "express": "^5.1.0",
-    "socket.io": "^4.8.1"
+    "express": "^4.18.2",
+    "socket.io": "^4.7.5",
+    "@supabase/supabase-js": "^2.39.7",
+    "cors": "^2.8.5"
   }
 }
