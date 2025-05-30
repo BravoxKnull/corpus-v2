@@ -127,6 +127,8 @@ io.on('connection', (socket) => {
   // Handle joining channel
   socket.on('join-channel', ({ channelId }) => {
     try {
+      console.log(`User ${socket.id} attempting to join channel ${channelId}`); // Debug log
+      
       const channel = channels.get(channelId);
       if (!channel) {
         throw new Error('Channel not found');
@@ -139,6 +141,16 @@ io.on('connection', (socket) => {
           currentChannel.users.delete(socket.id);
           currentChannel.userCount--;
           socket.leave(socket.currentChannel);
+          
+          // Notify others in the old channel
+          socket.to(socket.currentChannel).emit('user-left', {
+            socketId: socket.id
+          });
+          
+          // Remove channel if empty
+          if (currentChannel.userCount === 0) {
+            channels.delete(socket.currentChannel);
+          }
         }
       }
 
@@ -148,10 +160,14 @@ io.on('connection', (socket) => {
       socket.join(channelId);
       socket.currentChannel = channelId;
 
+      // Get user info
+      const user = users.get(socket.id);
+      const displayName = user ? user.displayName : 'Unknown User';
+
       // Notify others in channel
       socket.to(channelId).emit('user-joined', {
         socketId: socket.id,
-        displayName: users.get(socket.id)?.displayName
+        displayName: displayName
       });
 
       // Send current participants to new user
@@ -159,14 +175,17 @@ io.on('connection', (socket) => {
         .filter(id => id !== socket.id)
         .map(id => ({
           socketId: id,
-          displayName: users.get(id)?.displayName
+          displayName: users.get(id)?.displayName || 'Unknown User'
         }));
 
       socket.emit('participants', { participants });
+      
+      // Broadcast updated channel list
+      broadcastChannelList();
 
-      log(`User joined channel: ${channel.name} (${socket.id})`);
+      console.log(`User ${socket.id} joined channel ${channelId}`); // Debug log
     } catch (error) {
-      log(`Channel join error: ${error.message}`);
+      console.error(`Channel join error for ${socket.id}:`, error);
       socket.emit('channel-error', { message: error.message });
     }
   });

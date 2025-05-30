@@ -146,7 +146,10 @@ socket.on('channels-list', (channels) => {
         const div = document.createElement('div');
         div.className = 'channel-item' + (ch.id === currentChannelId ? ' active' : '');
         div.textContent = `# ${ch.name} (${ch.userCount || 0})`;
-        div.onclick = () => joinChannel(ch.id, ch.name);
+        div.onclick = () => {
+            console.log('Joining channel:', ch.id, ch.name); // Debug log
+            joinChannel(ch.id, ch.name);
+        };
         channelsList.appendChild(div);
     });
 });
@@ -165,66 +168,134 @@ socket.on('channel-error', (error) => {
 // --- Join/Leave Channel ---
 function joinChannel(channelId, channelName) {
     if (currentChannelId === channelId) return;
+    
+    console.log('Joining channel:', channelId, channelName); // Debug log
+    
+    // Leave current channel if any
+    if (currentChannelId) {
+        leaveChannel();
+    }
+    
+    // Join new channel
     socket.emit('join-channel', { channelId });
     currentChannelId = channelId;
-    currentChannelHeader.textContent = `# ${channelName}`;
-    currentChannelNameSpan.textContent = channelName;
-    participantsDiv.innerHTML = '';
-    for (const id in peers) { peers[id].destroy(); delete peers[id]; delete peerStreams[id]; }
+    
+    if (currentChannelHeader) {
+        currentChannelHeader.textContent = `# ${channelName}`;
+    }
+    
+    if (currentChannelNameSpan) {
+        currentChannelNameSpan.textContent = channelName;
+    }
+    
+    if (participantsDiv) {
+        participantsDiv.innerHTML = '';
+    }
+    
+    // Clean up existing peer connections
+    for (const id in peers) {
+        if (peers[id]) {
+            peers[id].destroy();
+            delete peers[id];
+            delete peerStreams[id];
+        }
+    }
+    
+    // Stop and cleanup local stream
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
     }
+    
     showToast(`Joined channel #${channelName}`);
 }
+
 function leaveChannel() {
     if (!currentChannelId) return;
+    
+    console.log('Leaving channel:', currentChannelId); // Debug log
+    
     socket.emit('leave-channel');
-    currentChannelHeader.textContent = 'Select a channel';
-    currentChannelNameSpan.textContent = '';
-    participantsDiv.innerHTML = '';
-    for (const id in peers) { peers[id].destroy(); delete peers[id]; delete peerStreams[id]; }
+    
+    if (currentChannelHeader) {
+        currentChannelHeader.textContent = 'Select a channel';
+    }
+    
+    if (currentChannelNameSpan) {
+        currentChannelNameSpan.textContent = '';
+    }
+    
+    if (participantsDiv) {
+        participantsDiv.innerHTML = '';
+    }
+    
+    // Clean up peer connections
+    for (const id in peers) {
+        if (peers[id]) {
+            peers[id].destroy();
+            delete peers[id];
+            delete peerStreams[id];
+        }
+    }
+    
+    // Stop and cleanup local stream
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
     }
+    
     currentChannelId = null;
     showToast('Left channel');
 }
-window.leaveChannel = leaveChannel;
 
 // --- Participants & Voice Streaming ---
 socket.on('participants', async ({ participants }) => {
     if (!participantsDiv) return;
+    console.log('Received participants:', participants); // Debug log
+    
     participantsDiv.innerHTML = '';
     
     // Ensure participants is an array
     const participantsArray = Array.isArray(participants) ? participants : [];
     
-    if (!localStream) await startVoice(); // Ensure mic is ready first
+    if (!localStream) {
+        try {
+            await startVoice();
+        } catch (err) {
+            console.error('Error starting voice:', err);
+            showToast('Failed to start voice chat', 'error');
+            return;
+        }
+    }
     
     participantsArray.forEach(({ socketId, displayName }) => {
         addParticipant(socketId, displayName);
         if (socketId !== socket.id && !peers[socketId]) {
-            connectToNewUser(socketId, displayName, false); // Always non-initiator for existing users
+            connectToNewUser(socketId, displayName, false);
         }
     });
 });
 
 socket.on('user-joined', async ({ socketId, displayName }) => {
     if (!participantsDiv) return;
+    console.log('User joined:', socketId, displayName); // Debug log
+    
     addParticipant(socketId, displayName, true);
     showToast(`${displayName} joined the channel`);
+    
     if (socketId !== socket.id && !peers[socketId]) {
-        connectToNewUser(socketId, displayName, true); // Always initiator for new users
+        connectToNewUser(socketId, displayName, true);
     }
 });
 
 socket.on('user-left', ({ socketId }) => {
+    console.log('User left:', socketId); // Debug log
+    
     const participantElement = document.getElementById('p-' + socketId);
     if (participantElement) {
         participantElement.remove();
     }
+    
     if (peers[socketId]) {
         peers[socketId].destroy();
         delete peers[socketId];
