@@ -117,22 +117,22 @@ function leaveChannel() {
 window.leaveChannel = leaveChannel;
 
 // --- Participants & Voice Streaming ---
-socket.on('participants', ({ participants }) => {
+socket.on('participants', async ({ participants }) => {
   participantsDiv.innerHTML = '';
+  if (!localStream) await startVoice(); // Ensure mic is ready first
   participants.forEach(({ socketId, displayName }) => {
     addParticipant(socketId, displayName);
     if (socketId !== socket.id && !peers[socketId]) {
-      connectToNewUser(socketId, displayName, false);
+      connectToNewUser(socketId, displayName, false); // Always non-initiator for existing users
     }
   });
-  if (!localStream) startVoice();
 });
 
-socket.on('user-joined', ({ socketId, displayName }) => {
+socket.on('user-joined', async ({ socketId, displayName }) => {
   addParticipant(socketId, displayName, true);
   showToast(`${displayName} joined the channel`);
   if (socketId !== socket.id && !peers[socketId]) {
-    connectToNewUser(socketId, displayName, true);
+    connectToNewUser(socketId, displayName, true); // Always initiator for new users
   }
 });
 
@@ -162,7 +162,14 @@ function addParticipant(socketId, displayName, animate = false) {
 // --- Voice Streaming (WebRTC) ---
 async function startVoice() {
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    localStream = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      } 
+    });
+    
     micToggle.onclick = () => {
       const micIcon = document.getElementById('micIcon');
       const enabled = localStream.getAudioTracks()[0].enabled = !localStream.getAudioTracks()[0].enabled;
@@ -171,8 +178,11 @@ async function startVoice() {
       setTimeout(() => micIcon.classList.remove('mic-animate'), 400);
       showToast(enabled ? 'Microphone enabled' : 'Microphone muted');
     };
+    
     detectSpeaking(localStream, socket.id);
+    console.log('[VOICE] Local stream started');
   } catch (err) {
+    console.error('[VOICE] Error starting local stream:', err);
     showModal('Microphone access denied!');
   }
 }
@@ -198,7 +208,7 @@ function detectSpeaking(stream, socketId) {
 
 socket.on('signal', ({ id, signal }) => {
   if (!peers[id]) {
-    connectToNewUser(id, '', false);
+    connectToNewUser(id, '', false); // Always non-initiator for incoming signals
   }
   if (peers[id]) {
     try {
@@ -211,6 +221,7 @@ socket.on('signal', ({ id, signal }) => {
 
 function connectToNewUser(id, displayName, initiator) {
   if (peers[id]) return;
+  
   const peer = new SimplePeer({
     initiator,
     trickle: false,
@@ -224,10 +235,17 @@ function connectToNewUser(id, displayName, initiator) {
       ]
     }
   });
+
   peer.on('signal', signal => {
     socket.emit('signal', { targetId: id, signal });
   });
+
+  peer.on('connect', () => {
+    console.log(`[PEER] Connected to ${id}`);
+  });
+
   peer.on('stream', stream => {
+    console.log(`[PEER] Received stream from ${id}`);
     let audio = document.getElementById('audio-' + id);
     if (!audio) {
       audio = document.createElement('audio');
@@ -240,15 +258,20 @@ function connectToNewUser(id, displayName, initiator) {
     peerStreams[id] = stream;
     detectSpeaking(stream, id);
   });
+
   peer.on('close', () => {
+    console.log(`[PEER] Connection closed with ${id}`);
     let audio = document.getElementById('audio-' + id);
     if (audio) audio.remove();
     delete peers[id];
     delete peerStreams[id];
   });
+
   peer.on('error', err => {
+    console.error(`[PEER] Error with ${id}:`, err);
     showModal('Connection error: ' + err.message);
   });
+
   peers[id] = peer;
 }
 
