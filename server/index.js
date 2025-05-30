@@ -27,6 +27,9 @@ const users = new Map();
 const rooms = new Map();
 let channelAutoId = 1;
 
+// Channel management
+const channels = new Map();
+
 // Helper: log with timestamp
 function log(msg) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
@@ -135,7 +138,53 @@ io.on('connection', (socket) => {
   socket.on('error', (err) => {
     log(`Socket error: ${err.message || err}`);
   });
+
+  // Handle channel creation
+  socket.on('create-channel', ({ name }) => {
+    try {
+      console.log('Creating channel:', name); // Debug log
+      const channelId = generateId();
+      const channel = {
+        id: channelId,
+        name: name,
+        users: new Set(),
+        userCount: 0
+      };
+      channels.set(channelId, channel);
+      
+      // Add creator to channel
+      channel.users.add(socket.id);
+      channel.userCount = 1;
+      
+      // Join the socket room
+      socket.join(channelId);
+      
+      // Update current channel
+      socket.currentChannel = channelId;
+      
+      // Notify client of success
+      socket.emit('channel-created', channel);
+      
+      // Broadcast updated channel list to all clients
+      broadcastChannelList();
+      
+      console.log('Channel created successfully:', channel); // Debug log
+    } catch (error) {
+      console.error('Error creating channel:', error);
+      socket.emit('channel-error', { message: 'Failed to create channel' });
+    }
+  });
 });
+
+// Helper function to broadcast channel list
+function broadcastChannelList() {
+  const channelList = Array.from(channels.values()).map(channel => ({
+    id: channel.id,
+    name: channel.name,
+    userCount: channel.userCount
+  }));
+  io.emit('channels-list', channelList);
+}
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => log(`Server running on port ${PORT}`));

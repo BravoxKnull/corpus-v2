@@ -60,12 +60,23 @@ function initializeUIElements() {
     modalMessage = document.getElementById('modal-message');
 
     // Set up event listeners only if elements exist
-    if (createChannelBtn) {
+    if (createChannelBtn && newChannelInput) {
         createChannelBtn.onclick = () => {
-            const name = newChannelInput?.value.trim();
-            if (!name) return showToast('Enter a channel name');
+            const name = newChannelInput.value.trim();
+            if (!name) {
+                showToast('Please enter a channel name');
+                return;
+            }
+            console.log('Creating channel:', name); // Debug log
             socket.emit('create-channel', { name });
-            if (newChannelInput) newChannelInput.value = '';
+            newChannelInput.value = '';
+        };
+
+        // Also allow Enter key to create channel
+        newChannelInput.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                createChannelBtn.click();
+            }
         };
     }
 
@@ -129,14 +140,26 @@ async function checkAuthAndInit() {
 // --- Channel Management ---
 socket.on('channels-list', (channels) => {
     if (!channelsList) return;
+    console.log('Received channels:', channels); // Debug log
     channelsList.innerHTML = '';
     channels.forEach(ch => {
         const div = document.createElement('div');
         div.className = 'channel-item' + (ch.id === currentChannelId ? ' active' : '');
-        div.textContent = `# ${ch.name} (${ch.userCount})`;
+        div.textContent = `# ${ch.name} (${ch.userCount || 0})`;
         div.onclick = () => joinChannel(ch.id, ch.name);
         channelsList.appendChild(div);
     });
+});
+
+// Add channel creation success/error handlers
+socket.on('channel-created', (channel) => {
+    console.log('Channel created:', channel); // Debug log
+    showToast(`Channel #${channel.name} created successfully`);
+});
+
+socket.on('channel-error', (error) => {
+    console.error('Channel error:', error); // Debug log
+    showToast(error.message || 'Failed to create channel', 'error');
 });
 
 // --- Join/Leave Channel ---
