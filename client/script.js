@@ -123,7 +123,7 @@ socket.on('participants', ({ participants }) => {
   participants.forEach(({ socketId, displayName }) => {
     addParticipant(socketId, displayName);
     if (socketId !== socket.id && !peers[socketId]) {
-      // Use socket.id comparison to determine initiator
+      // Always use socket.id comparison to determine initiator
       const initiator = socket.id > socketId;
       connectToNewUser(socketId, displayName, initiator);
     }
@@ -135,7 +135,7 @@ socket.on('participants', ({ participants }) => {
 socket.on('user-joined', ({ socketId, displayName }) => {
   addParticipant(socketId, displayName, true);
   showToast(`${displayName} joined the channel`);
-  // When a new user joins, only create peer if my socket.id < theirs (to avoid duplicate connections)
+  // Only create peer if my socket.id < theirs (to avoid duplicate)
   if (socketId !== socket.id && !peers[socketId] && socket.id < socketId) {
     connectToNewUser(socketId, displayName, true);
   }
@@ -206,13 +206,14 @@ function detectSpeaking(stream, socketId) {
 
 socket.on('signal', ({ id, signal }) => {
   if (!peers[id]) {
-    // Use socket.id comparison to determine initiator
+    // Always use socket.id comparison to determine initiator
     const initiator = socket.id > id;
     connectToNewUser(id, '', initiator);
   }
-  setTimeout(() => {
-    if (peers[id]) peers[id].signal(signal);
-  }, 50);
+  // Only signal if peer exists
+  if (peers[id]) {
+    peers[id].signal(signal);
+  }
 });
 
 function connectToNewUser(id, displayName, initiator) {
