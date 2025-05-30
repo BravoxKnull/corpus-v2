@@ -123,10 +123,7 @@ socket.on('participants', ({ participants }) => {
   participants.forEach(({ socketId, displayName }) => {
     addParticipant(socketId, displayName);
     if (socketId !== socket.id && !peers[socketId]) {
-      // Only create peer if my socket.id > theirs (initiator)
-      if (socket.id > socketId) {
-        connectToNewUser(socketId, displayName, true);
-      }
+      connectToNewUser(socketId, displayName, true); // always initiator
     }
   });
   if (!localStream) startVoice();
@@ -135,9 +132,8 @@ socket.on('participants', ({ participants }) => {
 socket.on('user-joined', ({ socketId, displayName }) => {
   addParticipant(socketId, displayName, true);
   showToast(`${displayName} joined the channel`);
-  // Only create peer if my socket.id < theirs (initiator)
-  if (socketId !== socket.id && !peers[socketId] && socket.id < socketId) {
-    connectToNewUser(socketId, displayName, true);
+  if (socketId !== socket.id && !peers[socketId]) {
+    connectToNewUser(socketId, displayName, false); // always non-initiator
   }
 });
 
@@ -206,9 +202,7 @@ function detectSpeaking(stream, socketId) {
 
 socket.on('signal', ({ id, signal }) => {
   if (!peers[id]) {
-    // Use the same rule to determine initiator
-    const initiator = socket.id > id;
-    connectToNewUser(id, '', initiator);
+    connectToNewUser(id, '', false); // always non-initiator
   }
   if (peers[id]) {
     try {
