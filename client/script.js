@@ -122,7 +122,7 @@ socket.on('participants', ({ participants }) => {
   participants.forEach(({ socketId, displayName }) => {
     addParticipant(socketId, displayName);
     if (socketId !== socket.id && !peers[socketId]) {
-      connectToNewUser(socketId, displayName, true);
+      connectToNewUser(socketId, displayName, false);
     }
   });
   if (!localStream) startVoice();
@@ -132,7 +132,7 @@ socket.on('user-joined', ({ socketId, displayName }) => {
   addParticipant(socketId, displayName, true);
   showToast(`${displayName} joined the channel`);
   if (socketId !== socket.id && !peers[socketId]) {
-    connectToNewUser(socketId, displayName, false);
+    connectToNewUser(socketId, displayName, true);
   }
 });
 
