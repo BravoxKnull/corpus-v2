@@ -23,8 +23,8 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, '../client')));
 
 // In-memory stores
-const users = {}; // { socketId: { id, username, displayName, channelId } }
-const channels = {}; // { channelId: { name, users: Set<socketId> } }
+const users = new Map();
+const rooms = new Map();
 let channelAutoId = 1;
 
 // Helper: log with timestamp
@@ -39,7 +39,7 @@ function sanitizeChannelName(name) {
 
 // Helper: get public channel info
 function getChannelsList() {
-  return Object.entries(channels).map(([id, ch]) => ({ id, name: ch.name, userCount: ch.users.size }));
+  return Object.entries(rooms).map(([id, ch]) => ({ id, name: id, userCount: ch.size }));
 }
 
 // Load channels from Supabase on server start
@@ -47,7 +47,7 @@ async function loadChannelsFromSupabase() {
   const { data, error } = await supabase.from('channels').select('*');
   if (data) {
     data.forEach(ch => {
-      channels[ch.id] = { name: ch.name, users: new Set() };
+      rooms.set(ch.id, new Set());
     });
     log(`Loaded ${data.length} channels from Supabase.`);
   } else if (error) {
@@ -62,96 +62,73 @@ io.on('connection', (socket) => {
   // Send current channels list
   socket.emit('channels-list', getChannelsList());
 
-  // Handle user registration (from client after auth)
-  socket.on('register-user', ({ id, username, displayName }) => {
-    users[socket.id] = { id, username, displayName, channelId: null };
-    log(`User registered: ${username} (${socket.id})`);
-    socket.emit('channels-list', getChannelsList());
+  // Handle user registration
+  socket.on('register-user', (userData) => {
+    const { displayName, roomId } = userData;
+    users.set(socket.id, { displayName, roomId });
+    
+    // Join room
+    socket.join(roomId);
+    
+    // Get room participants
+    const room = rooms.get(roomId) || new Set();
+    room.add(socket.id);
+    rooms.set(roomId, room);
+
+    // Notify others in room
+    socket.to(roomId).emit('user-joined', {
+      id: socket.id,
+      displayName
+    });
+
+    // Send current participants to new user
+    const participants = Array.from(room)
+      .filter(id => id !== socket.id)
+      .map(id => ({
+        id,
+        displayName: users.get(id)?.displayName
+      }));
+
+    socket.emit('participants', { users: participants });
   });
 
-  // Create a new channel (persist in Supabase)
-  socket.on('create-channel', async ({ name }) => {
-    const cleanName = sanitizeChannelName(name);
-    if (!cleanName) {
-      socket.emit('error', { message: 'Invalid channel name.' });
-      return;
-    }
-    if (Object.values(channels).some(ch => ch.name === cleanName)) {
-      socket.emit('error', { message: 'Channel name already exists.' });
-      return;
-    }
-    // Insert into Supabase
-    const { data, error } = await supabase.from('channels').insert([{ name: cleanName }]).select().single();
-    if (error) {
-      socket.emit('error', { message: 'Failed to create channel.' });
-      log('Supabase error: ' + error.message);
-      return;
-    }
-    channels[data.id] = { name: data.name, users: new Set() };
-    io.emit('channels-list', getChannelsList());
-    log(`Channel created: ${cleanName} (${data.id})`);
-  });
-
-  // Join a channel
-  socket.on('join-channel', ({ channelId }) => {
-    const user = users[socket.id];
-    if (!user) return;
-    // Leave previous channel
-    if (user.channelId && channels[user.channelId]) {
-      channels[user.channelId].users.delete(socket.id);
-      io.to(user.channelId).emit('user-left', { socketId: socket.id });
-      socket.leave(user.channelId);
-    }
-    // Join new channel
-    if (!channels[channelId]) {
-      socket.emit('error', { message: 'Channel does not exist.' });
-      return;
-    }
-    user.channelId = channelId;
-    channels[channelId].users.add(socket.id);
-    socket.join(channelId);
-    // Notify users in channel
-    io.to(channelId).emit('user-joined', { socketId: socket.id, username: user.username, displayName: user.displayName });
-    // Send current participants
-    const participants = Array.from(channels[channelId].users).map(sid => {
-      const u = users[sid];
-      return u ? { socketId: sid, username: u.username, displayName: u.displayName } : null;
-    }).filter(Boolean);
-    socket.emit('participants', { participants });
-    log(`User ${user.username} joined channel ${channels[channelId].name}`);
-  });
-
-  // Leave channel
-  socket.on('leave-channel', () => {
-    const user = users[socket.id];
-    if (user && user.channelId && channels[user.channelId]) {
-      channels[user.channelId].users.delete(socket.id);
-      io.to(user.channelId).emit('user-left', { socketId: socket.id });
-      socket.leave(user.channelId);
-      user.channelId = null;
-      log(`User ${user.username} left channel`);
+  // Handle WebRTC signaling
+  socket.on('signal', (data) => {
+    const { targetId, signal } = data;
+    const targetSocket = io.sockets.sockets.get(targetId);
+    
+    if (targetSocket) {
+      targetSocket.emit('signal', {
+        signal,
+        fromId: socket.id
+      });
     }
   });
 
-  // WebRTC signaling (per channel)
-  socket.on('signal', ({ targetId, signal }) => {
-    const user = users[socket.id];
-    if (!user || !user.channelId) return;
-    if (!channels[user.channelId] || !channels[user.channelId].users.has(targetId)) return;
-    io.to(targetId).emit('signal', { id: socket.id, signal });
-  });
-
-  // Disconnect
+  // Handle disconnection
   socket.on('disconnect', () => {
-    const user = users[socket.id];
+    const user = users.get(socket.id);
     if (user) {
-      if (user.channelId && channels[user.channelId]) {
-        channels[user.channelId].users.delete(socket.id);
-        io.to(user.channelId).emit('user-left', { socketId: socket.id });
+      const { roomId } = user;
+      
+      // Remove user from room
+      const room = rooms.get(roomId);
+      if (room) {
+        room.delete(socket.id);
+        if (room.size === 0) {
+          rooms.delete(roomId);
+        }
       }
-      delete users[socket.id];
-      log(`Client disconnected: ${socket.id}`);
+
+      // Notify others
+      socket.to(roomId).emit('user-left', {
+        id: socket.id
+      });
+
+      // Clean up user data
+      users.delete(socket.id);
     }
+    log(`Client disconnected: ${socket.id}`);
   });
 
   // Error handler

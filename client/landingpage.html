@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Voicecord - Channels</title>
+  <title>Voice Chat</title>
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
@@ -177,49 +177,69 @@
   </style>
 </head>
 <body class="discord-bg">
-  <div class="sidebar">
-    <div class="sidebar-header">
-      <span class="material-icons logo-icon">headset_mic</span>
-      <span class="logo-text">Voicecord</span>
-    </div>
-    <div class="channels-list" id="channels-list"></div>
-    <div class="create-channel">
-      <input type="text" id="new-channel-name" placeholder="New channel name" />
-      <button id="create-channel-btn"><span class="material-icons">add</span></button>
-    </div>
-    <div class="sidebar-footer">&copy; 2024 Voicecord</div>
-  </div>
-  <div class="main-content">
-    <div class="main-header" id="current-channel">Select a channel</div>
-    <div class="voice-section">
-      <section id="voiceRoom" class="card">
-        <h2>Voice Channel: <span id="currentChannelName"></span></h2>
-        <div id="participants" class="participants"></div>
-        <div class="controls">
-          <button id="micToggle" class="icon-btn" aria-label="Toggle Mic">
-            <span id="micIcon" class="material-icons">mic</span>
-          </button>
-          <button class="danger" onclick="leaveChannel()">Leave Channel</button>
+  <div class="container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="user-profile">
+        <div class="avatar">
+          <span class="material-icons">person</span>
         </div>
-      </section>
-    </div>
-    <div class="user-bar">
-      <div class="user-info">
-        <div class="avatar" id="user-avatar">U</div>
-        <span id="user-displayname">User</span>
+        <div class="user-info">
+          <span id="displayName">Loading...</span>
+        </div>
       </div>
-      <button id="logout-btn">Logout</button>
+      
+      <div class="channels">
+        <h3>Voice Channels</h3>
+        <div id="channelsList">
+          <!-- Channels will be added here -->
+        </div>
+        <button id="createChannelBtn" class="btn">
+          <span class="material-icons">add</span>
+          New Channel
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <div class="header">
+        <h2 id="currentChannel">Select a Channel</h2>
+        <div class="controls">
+          <button id="micToggle" class="btn">
+            <span class="material-icons" id="micIcon">mic</span>
+          </button>
+          <button id="logoutBtn" class="btn">
+            <span class="material-icons">logout</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="voice-chat">
+        <div id="participants" class="participants-grid">
+          <!-- Participants will be added here -->
+        </div>
+      </div>
     </div>
   </div>
-  <div id="toast" class="toast" style="display:none;"></div>
-  <div id="modal" class="modal" style="display:none;">
+
+  <!-- Modals -->
+  <div id="createChannelModal" class="modal">
     <div class="modal-content">
-      <span id="modal-message"></span>
-      <button onclick="closeModal()">Close</button>
+      <h3>Create New Channel</h3>
+      <input type="text" id="channelName" placeholder="Channel Name">
+      <div class="modal-buttons">
+        <button id="createChannelConfirm" class="btn">Create</button>
+        <button id="createChannelCancel" class="btn">Cancel</button>
+      </div>
     </div>
   </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer"></div>
+
+  <!-- Scripts -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html> 

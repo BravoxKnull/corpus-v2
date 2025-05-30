@@ -3,11 +3,28 @@ const SUPABASE_URL = 'https://tlhzsssflsljvvzfyapc.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsaHpzc3NmbHNsanZ2emZ5YXBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2MDYzOTYsImV4cCI6MjA2NDE4MjM5Nn0.-_Pp6zG2v7RiP_0m_pQOEJyAJPn5Zo4yPGCHHJH0IO0';
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// --- WebRTC Configuration ---
+const configuration = {
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        // Add your TURN servers here for better connectivity
+        {
+            urls: 'turn:your-turn-server.com:3478',
+            username: 'username',
+            credential: 'password'
+        }
+    ],
+    iceCandidatePoolSize: 10
+};
+
+// --- Global State ---
 let currentUser = null;
 let currentChannelId = null;
 let localStream = null;
-let peers = {};
-let peerStreams = {};
+let audioContext = null;
+let audioDestination = null;
+const peers = {};  // Single declaration of peers object
+const peerStreams = {};
 
 const socket = io();
 
@@ -159,121 +176,263 @@ function addParticipant(socketId, displayName, animate = false) {
   participantsDiv.appendChild(div);
 }
 
-// --- Voice Streaming (WebRTC) ---
+// Initialize voice with optimized audio settings
 async function startVoice() {
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ 
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      } 
-    });
-    
-    micToggle.onclick = () => {
-      const micIcon = document.getElementById('micIcon');
-      const enabled = localStream.getAudioTracks()[0].enabled = !localStream.getAudioTracks()[0].enabled;
-      micIcon.textContent = enabled ? 'mic' : 'mic_off';
-      micIcon.classList.add('mic-animate');
-      setTimeout(() => micIcon.classList.remove('mic-animate'), 400);
-      showToast(enabled ? 'Microphone enabled' : 'Microphone muted');
-    };
-    
-    detectSpeaking(localStream, socket.id);
-    console.log('[VOICE] Local stream started');
-  } catch (err) {
-    console.error('[VOICE] Error starting local stream:', err);
-    showModal('Microphone access denied!');
-  }
-}
-
-function detectSpeaking(stream, socketId) {
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  const analyser = audioContext.createAnalyser();
-  const source = audioContext.createMediaStreamSource(stream);
-  source.connect(analyser);
-  analyser.fftSize = 512;
-  const dataArray = new Uint8Array(analyser.frequencyBinCount);
-  function checkSpeaking() {
-    analyser.getByteFrequencyData(dataArray);
-    const volume = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-    const activeCircle = document.getElementById('active-' + socketId);
-    if (activeCircle) {
-      activeCircle.style.visibility = (volume > 15 && stream.getAudioTracks()[0].enabled) ? 'visible' : 'hidden';
-    }
-    requestAnimationFrame(checkSpeaking);
-  }
-  checkSpeaking();
-}
-
-socket.on('signal', ({ id, signal }) => {
-  if (!peers[id]) {
-    connectToNewUser(id, '', false); // Always non-initiator for incoming signals
-  }
-  if (peers[id]) {
     try {
-      peers[id].signal(signal);
-    } catch (e) {
-      console.warn(`[SIGNAL] Error signaling peer ${id}:`, e);
+        localStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                channelCount: 1,
+                sampleRate: 48000,
+                sampleSize: 16,
+                volume: 1.0
+            }
+        });
+
+        // Apply additional audio processing
+        audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(localStream);
+        audioDestination = audioContext.createMediaStreamDestination();
+        
+        // Add audio processing nodes
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 1.2; // Slight volume boost
+
+        const compressor = audioContext.createDynamicsCompressor();
+        compressor.threshold.value = -50;
+        compressor.knee.value = 40;
+        compressor.ratio.value = 12;
+        compressor.attack.value = 0;
+        compressor.release.value = 0.25;
+
+        // Connect audio nodes
+        source.connect(gainNode);
+        gainNode.connect(compressor);
+        compressor.connect(audioDestination);
+
+        return audioDestination.stream;
+    } catch (err) {
+        console.error('Error accessing microphone:', err);
+        throw err;
     }
-  }
+}
+
+// Create and manage peer connection
+function connectToNewUser(id, displayName, initiator) {
+    const peerConnection = new RTCPeerConnection(configuration);
+    
+    // Add local stream tracks to peer connection
+    audioDestination.stream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, audioDestination.stream);
+    });
+
+    // Handle ICE candidates
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            socket.emit('signal', {
+                targetId: id,
+                signal: {
+                    type: 'candidate',
+                    candidate: event.candidate
+                }
+            });
+        }
+    };
+
+    // Handle ICE connection state changes
+    peerConnection.oniceconnectionstatechange = () => {
+        console.log(`[PEER] ICE Connection State: ${peerConnection.iceConnectionState}`);
+        if (peerConnection.iceConnectionState === 'disconnected' || 
+            peerConnection.iceConnectionState === 'failed') {
+            reconnectPeer(id);
+        }
+    };
+
+    // Handle incoming tracks with audio processing
+    peerConnection.ontrack = (event) => {
+        const [remoteStream] = event.streams;
+        
+        // Create audio context for remote stream
+        const remoteAudioContext = new AudioContext();
+        const source = remoteAudioContext.createMediaStreamSource(remoteStream);
+        const destination = remoteAudioContext.createMediaStreamDestination();
+
+        // Add audio processing for remote stream
+        const gainNode = remoteAudioContext.createGain();
+        gainNode.gain.value = 1.0;
+
+        const compressor = remoteAudioContext.createDynamicsCompressor();
+        compressor.threshold.value = -50;
+        compressor.knee.value = 40;
+        compressor.ratio.value = 12;
+        compressor.attack.value = 0;
+        compressor.release.value = 0.25;
+
+        // Connect audio nodes
+        source.connect(gainNode);
+        gainNode.connect(compressor);
+        compressor.connect(destination);
+
+        // Create audio element for processed stream
+        const audio = new Audio();
+        audio.srcObject = destination.stream;
+        audio.autoplay = true;
+        audio.volume = 1.0;
+    };
+
+    // Create and send offer if initiator
+    if (initiator) {
+        createAndSendOffer(peerConnection, id);
+    }
+
+    return peerConnection;
+}
+
+// Create and send offer
+async function createAndSendOffer(peerConnection, targetId) {
+    try {
+        const offer = await peerConnection.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: false
+        });
+        
+        await peerConnection.setLocalDescription(offer);
+        
+        socket.emit('signal', {
+            targetId: targetId,
+            signal: {
+                type: 'offer',
+                sdp: peerConnection.localDescription
+            }
+        });
+    } catch (err) {
+        console.error('Error creating offer:', err);
+        handleError(err);
+    }
+}
+
+// Handle incoming signals
+socket.on('signal', async (data) => {
+    const { signal, fromId } = data;
+    let peerConnection = peers[fromId];
+
+    if (!peerConnection) {
+        peerConnection = connectToNewUser(fromId, '', false);
+        peers[fromId] = peerConnection;
+    }
+
+    try {
+        if (signal.type === 'offer') {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            
+            socket.emit('signal', {
+                targetId: fromId,
+                signal: {
+                    type: 'answer',
+                    sdp: peerConnection.localDescription
+                }
+            });
+        } else if (signal.type === 'answer') {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+        } else if (signal.type === 'candidate') {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate));
+        }
+    } catch (err) {
+        console.error('Error handling signal:', err);
+        handleError(err);
+    }
 });
 
-function connectToNewUser(id, displayName, initiator) {
-  if (peers[id]) return;
-  
-  const peer = new SimplePeer({
-    initiator,
-    trickle: false,
-    stream: localStream,
-    config: {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-      ]
-    }
-  });
-
-  peer.on('signal', signal => {
-    socket.emit('signal', { targetId: id, signal });
-  });
-
-  peer.on('connect', () => {
-    console.log(`[PEER] Connected to ${id}`);
-  });
-
-  peer.on('stream', stream => {
-    console.log(`[PEER] Received stream from ${id}`);
-    let audio = document.getElementById('audio-' + id);
-    if (!audio) {
-      audio = document.createElement('audio');
-      audio.id = 'audio-' + id;
-      audio.autoplay = true;
-      audio.controls = true;
-      document.getElementById('p-' + id)?.appendChild(audio);
-    }
-    audio.srcObject = stream;
-    peerStreams[id] = stream;
-    detectSpeaking(stream, id);
-  });
-
-  peer.on('close', () => {
-    console.log(`[PEER] Connection closed with ${id}`);
-    let audio = document.getElementById('audio-' + id);
-    if (audio) audio.remove();
-    delete peers[id];
-    delete peerStreams[id];
-  });
-
-  peer.on('error', err => {
-    console.error(`[PEER] Error with ${id}:`, err);
-    showModal('Connection error: ' + err.message);
-  });
-
-  peers[id] = peer;
+// Reconnection logic
+async function reconnectPeer(peerId) {
+    console.log(`[PEER] Attempting to reconnect to peer ${peerId}`);
+    cleanupPeer(peerId);
+    const peerConnection = connectToNewUser(peerId, '', true);
+    peers[peerId] = peerConnection;
 }
+
+// Cleanup peer connection
+function cleanupPeer(peerId) {
+    if (peers[peerId]) {
+        peers[peerId].close();
+        delete peers[peerId];
+    }
+}
+
+// Mute/unmute functionality
+function toggleMute() {
+    if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        audioTrack.enabled = !audioTrack.enabled;
+    }
+}
+
+// Volume control
+function setVolume(volume) {
+    if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack.getSettings().volume !== undefined) {
+            audioTrack.applyConstraints({
+                volume: volume
+            });
+        }
+    }
+}
+
+// Error handling
+function handleError(err) {
+    console.error('[ERROR] WebRTC Error:', err);
+    showToast('Connection error occurred. Attempting to reconnect...', 'error');
+}
+
+// Initialize voice chat
+async function initializeVoiceChat() {
+    try {
+        await startVoice();
+        setupSocketConnection();
+    } catch (err) {
+        handleError(err);
+    }
+}
+
+// Set up socket connection
+function setupSocketConnection() {
+    socket.on('connect', () => {
+        console.log('[SOCKET] Connected to signaling server');
+    });
+
+    socket.on('disconnect', () => {
+        console.log('[SOCKET] Disconnected from signaling server');
+        cleanup();
+    });
+}
+
+// Cleanup all connections
+function cleanup() {
+    // Stop local stream
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+    }
+    
+    // Close audio context
+    if (audioContext) {
+        audioContext.close();
+    }
+    
+    // Close all peer connections
+    Object.keys(peers).forEach(peerId => {
+        cleanupPeer(peerId);
+    });
+}
+
+// Start the voice chat when the page loads
+document.addEventListener('DOMContentLoaded', () => {
+    initializeVoiceChat();
+});
 
 logoutBtn.onclick = async () => {
   await supabase.auth.signOut();
