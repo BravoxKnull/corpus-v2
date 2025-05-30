@@ -29,151 +29,188 @@ const peerStreams = {};
 const socket = io();
 
 // --- UI Elements ---
-const channelsList = document.getElementById('channels-list');
-const createChannelBtn = document.getElementById('create-channel-btn');
-const newChannelInput = document.getElementById('new-channel-name');
-const currentChannelHeader = document.getElementById('current-channel');
-const currentChannelNameSpan = document.getElementById('currentChannelName');
-const participantsDiv = document.getElementById('participants');
-const micToggle = document.getElementById('micToggle');
-const logoutBtn = document.getElementById('logout-btn');
-const userAvatar = document.getElementById('user-avatar');
-const userDisplayName = document.getElementById('user-displayname');
-const toast = document.getElementById('toast');
-const modal = document.getElementById('modal');
-const modalMessage = document.getElementById('modal-message');
+let channelsList;
+let createChannelBtn;
+let newChannelInput;
+let currentChannelHeader;
+let currentChannelNameSpan;
+let participantsDiv;
+let micToggle;
+let logoutBtn;
+let userAvatar;
+let userDisplayName;
+let toast;
+let modal;
+let modalMessage;
+
+// Initialize UI elements
+function initializeUIElements() {
+    channelsList = document.getElementById('channels-list');
+    createChannelBtn = document.getElementById('create-channel-btn');
+    newChannelInput = document.getElementById('new-channel-name');
+    currentChannelHeader = document.getElementById('current-channel');
+    currentChannelNameSpan = document.getElementById('currentChannelName');
+    participantsDiv = document.getElementById('participants');
+    micToggle = document.getElementById('micToggle');
+    logoutBtn = document.getElementById('logout-btn');
+    userAvatar = document.getElementById('user-avatar');
+    userDisplayName = document.getElementById('user-displayname');
+    toast = document.getElementById('toast');
+    modal = document.getElementById('modal');
+    modalMessage = document.getElementById('modal-message');
+
+    // Set up event listeners only if elements exist
+    if (createChannelBtn) {
+        createChannelBtn.onclick = () => {
+            const name = newChannelInput?.value.trim();
+            if (!name) return showToast('Enter a channel name');
+            socket.emit('create-channel', { name });
+            if (newChannelInput) newChannelInput.value = '';
+        };
+    }
+
+    if (micToggle) {
+        micToggle.onclick = toggleMute;
+    }
+
+    if (logoutBtn) {
+        logoutBtn.onclick = async () => {
+            await supabase.auth.signOut();
+            window.location.href = 'index.html';
+        };
+    }
+}
 
 // --- Toast & Modal ---
 function showToast(message, duration = 3000) {
-  toast.textContent = message;
-  toast.style.display = 'block';
-  setTimeout(() => { toast.style.display = 'none'; }, duration);
+    if (!toast) return;
+    toast.textContent = message;
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, duration);
 }
+
 function showModal(message) {
-  modalMessage.textContent = message;
-  modal.style.display = 'flex';
+    if (!modal || !modalMessage) return;
+    modalMessage.textContent = message;
+    modal.style.display = 'flex';
 }
+
 function closeModal() {
-  modal.style.display = 'none';
+    if (!modal) return;
+    modal.style.display = 'none';
 }
 window.closeModal = closeModal;
 
 // --- Auth Check & User Info ---
 async function checkAuthAndInit() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session || !session.user) {
-    window.location.href = 'index.html';
-    return;
-  }
-  // Fetch user info from Supabase
-  const { data: userData } = await supabase.from('users').select('*').eq('id', session.user.id).single();
-  if (!userData) {
-    showModal('User not found. Please log in again.');
-    setTimeout(() => window.location.href = 'index.html', 2000);
-    return;
-  }
-  currentUser = userData;
-  userDisplayName.textContent = userData.display_name;
-  userAvatar.textContent = userData.display_name ? userData.display_name[0].toUpperCase() : 'U';
-  // Register user with server
-  socket.emit('register-user', {
-    id: userData.id,
-    username: userData.username,
-    displayName: userData.display_name
-  });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || !session.user) {
+        window.location.href = 'index.html';
+        return;
+    }
+    // Fetch user info from Supabase
+    const { data: userData } = await supabase.from('users').select('*').eq('id', session.user.id).single();
+    if (!userData) {
+        showModal('User not found. Please log in again.');
+        setTimeout(() => window.location.href = 'index.html', 2000);
+        return;
+    }
+    currentUser = userData;
+    if (userDisplayName) userDisplayName.textContent = userData.display_name;
+    if (userAvatar) userAvatar.textContent = userData.display_name ? userData.display_name[0].toUpperCase() : 'U';
+    // Register user with server
+    socket.emit('register-user', {
+        id: userData.id,
+        username: userData.username,
+        displayName: userData.display_name
+    });
 }
 
 // --- Channel Management ---
 socket.on('channels-list', (channels) => {
-  channelsList.innerHTML = '';
-  channels.forEach(ch => {
-    const div = document.createElement('div');
-    div.className = 'channel-item' + (ch.id === currentChannelId ? ' active' : '');
-    div.textContent = `# ${ch.name} (${ch.userCount})`;
-    div.onclick = () => joinChannel(ch.id, ch.name);
-    channelsList.appendChild(div);
-  });
+    if (!channelsList) return;
+    channelsList.innerHTML = '';
+    channels.forEach(ch => {
+        const div = document.createElement('div');
+        div.className = 'channel-item' + (ch.id === currentChannelId ? ' active' : '');
+        div.textContent = `# ${ch.name} (${ch.userCount})`;
+        div.onclick = () => joinChannel(ch.id, ch.name);
+        channelsList.appendChild(div);
+    });
 });
-
-createChannelBtn.onclick = () => {
-  const name = newChannelInput.value.trim();
-  if (!name) return showToast('Enter a channel name');
-  socket.emit('create-channel', { name });
-  newChannelInput.value = '';
-};
 
 // --- Join/Leave Channel ---
 function joinChannel(channelId, channelName) {
-  if (currentChannelId === channelId) return;
-  socket.emit('join-channel', { channelId });
-  currentChannelId = channelId;
-  currentChannelHeader.textContent = `# ${channelName}`;
-  currentChannelNameSpan.textContent = channelName;
-  participantsDiv.innerHTML = '';
-  for (const id in peers) { peers[id].destroy(); delete peers[id]; delete peerStreams[id]; }
-  if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
-    localStream = null;
-  }
-  showToast(`Joined channel #${channelName}`);
+    if (currentChannelId === channelId) return;
+    socket.emit('join-channel', { channelId });
+    currentChannelId = channelId;
+    currentChannelHeader.textContent = `# ${channelName}`;
+    currentChannelNameSpan.textContent = channelName;
+    participantsDiv.innerHTML = '';
+    for (const id in peers) { peers[id].destroy(); delete peers[id]; delete peerStreams[id]; }
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+    showToast(`Joined channel #${channelName}`);
 }
 function leaveChannel() {
-  if (!currentChannelId) return;
-  socket.emit('leave-channel');
-  currentChannelHeader.textContent = 'Select a channel';
-  currentChannelNameSpan.textContent = '';
-  participantsDiv.innerHTML = '';
-  for (const id in peers) { peers[id].destroy(); delete peers[id]; delete peerStreams[id]; }
-  if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
-    localStream = null;
-  }
-  currentChannelId = null;
-  showToast('Left channel');
+    if (!currentChannelId) return;
+    socket.emit('leave-channel');
+    currentChannelHeader.textContent = 'Select a channel';
+    currentChannelNameSpan.textContent = '';
+    participantsDiv.innerHTML = '';
+    for (const id in peers) { peers[id].destroy(); delete peers[id]; delete peerStreams[id]; }
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+    currentChannelId = null;
+    showToast('Left channel');
 }
 window.leaveChannel = leaveChannel;
 
 // --- Participants & Voice Streaming ---
 socket.on('participants', async ({ participants }) => {
-  participantsDiv.innerHTML = '';
-  if (!localStream) await startVoice(); // Ensure mic is ready first
-  participants.forEach(({ socketId, displayName }) => {
-    addParticipant(socketId, displayName);
-    if (socketId !== socket.id && !peers[socketId]) {
-      connectToNewUser(socketId, displayName, false); // Always non-initiator for existing users
-    }
-  });
+    participantsDiv.innerHTML = '';
+    if (!localStream) await startVoice(); // Ensure mic is ready first
+    participants.forEach(({ socketId, displayName }) => {
+        addParticipant(socketId, displayName);
+        if (socketId !== socket.id && !peers[socketId]) {
+            connectToNewUser(socketId, displayName, false); // Always non-initiator for existing users
+        }
+    });
 });
 
 socket.on('user-joined', async ({ socketId, displayName }) => {
-  addParticipant(socketId, displayName, true);
-  showToast(`${displayName} joined the channel`);
-  if (socketId !== socket.id && !peers[socketId]) {
-    connectToNewUser(socketId, displayName, true); // Always initiator for new users
-  }
+    addParticipant(socketId, displayName, true);
+    showToast(`${displayName} joined the channel`);
+    if (socketId !== socket.id && !peers[socketId]) {
+        connectToNewUser(socketId, displayName, true); // Always initiator for new users
+    }
 });
 
 socket.on('user-left', ({ socketId }) => {
-  document.getElementById('p-' + socketId)?.remove();
-  if (peers[socketId]) {
-    peers[socketId].destroy();
-    delete peers[socketId];
-    delete peerStreams[socketId];
-  }
+    document.getElementById('p-' + socketId)?.remove();
+    if (peers[socketId]) {
+        peers[socketId].destroy();
+        delete peers[socketId];
+        delete peerStreams[socketId];
+    }
 });
 
 function addParticipant(socketId, displayName, animate = false) {
-  if (document.getElementById('p-' + socketId)) return;
-  const div = document.createElement('div');
-  div.id = 'p-' + socketId;
-  div.className = animate ? 'participant-join-animate' : '';
-  const activeCircle = document.createElement('span');
-  activeCircle.className = 'active-speaker';
-  activeCircle.style.visibility = 'hidden';
-  activeCircle.id = 'active-' + socketId;
-  div.appendChild(activeCircle);
-  div.appendChild(document.createTextNode(displayName));
-  participantsDiv.appendChild(div);
+    if (document.getElementById('p-' + socketId)) return;
+    const div = document.createElement('div');
+    div.id = 'p-' + socketId;
+    div.className = animate ? 'participant-join-animate' : '';
+    const activeCircle = document.createElement('span');
+    activeCircle.className = 'active-speaker';
+    activeCircle.style.visibility = 'hidden';
+    activeCircle.id = 'active-' + socketId;
+    div.appendChild(activeCircle);
+    div.appendChild(document.createTextNode(displayName));
+    participantsDiv.appendChild(div);
 }
 
 // Initialize voice with optimized audio settings
@@ -429,18 +466,13 @@ function cleanup() {
     });
 }
 
-// Start the voice chat when the page loads
+// Initialize everything when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    initializeUIElements();
+    checkAuthAndInit();
     initializeVoiceChat();
 });
 
-logoutBtn.onclick = async () => {
-  await supabase.auth.signOut();
-  window.location.href = 'index.html';
-};
-
 socket.on('error', (err) => {
-  showModal(err.message || 'An error occurred');
+    showModal(err.message || 'An error occurred');
 });
-
-checkAuthAndInit();
