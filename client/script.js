@@ -123,9 +123,11 @@ socket.on('participants', ({ participants }) => {
   participants.forEach(({ socketId, displayName }) => {
     addParticipant(socketId, displayName);
     if (socketId !== socket.id && !peers[socketId]) {
-      // Always use socket.id comparison to determine initiator
-      const initiator = socket.id > socketId;
-      connectToNewUser(socketId, displayName, initiator);
+      // Only create peer if my socket.id > theirs (initiator)
+      if (socket.id > socketId) {
+        console.log(`[PEER] Creating initiator peer: me (${socket.id}) > them (${socketId})`);
+        connectToNewUser(socketId, displayName, true);
+      }
     }
   });
   // Start voice if not already
@@ -135,8 +137,9 @@ socket.on('participants', ({ participants }) => {
 socket.on('user-joined', ({ socketId, displayName }) => {
   addParticipant(socketId, displayName, true);
   showToast(`${displayName} joined the channel`);
-  // Only create peer if my socket.id < theirs (to avoid duplicate)
+  // Only create peer if my socket.id < theirs (initiator)
   if (socketId !== socket.id && !peers[socketId] && socket.id < socketId) {
+    console.log(`[PEER] Creating initiator peer: me (${socket.id}) < them (${socketId})`);
     connectToNewUser(socketId, displayName, true);
   }
 });
@@ -147,6 +150,7 @@ socket.on('user-left', ({ socketId }) => {
     peers[socketId].destroy();
     delete peers[socketId];
     delete peerStreams[socketId];
+    console.log(`[PEER] Destroyed peer for ${socketId}`);
   }
 });
 
@@ -208,11 +212,17 @@ socket.on('signal', ({ id, signal }) => {
   if (!peers[id]) {
     // Always use socket.id comparison to determine initiator
     const initiator = socket.id > id;
+    console.log(`[SIGNAL] Creating peer for signal: me (${socket.id}) ${initiator ? '>' : '<'} them (${id}), initiator: ${initiator}`);
     connectToNewUser(id, '', initiator);
   }
-  // Only signal if peer exists
+  // Only signal if peer exists and not in stable state
   if (peers[id]) {
-    peers[id].signal(signal);
+    try {
+      peers[id].signal(signal);
+      console.log(`[SIGNAL] Signaled peer ${id}`);
+    } catch (e) {
+      console.warn(`[SIGNAL] Error signaling peer ${id}:`, e);
+    }
   }
 });
 
