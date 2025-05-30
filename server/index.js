@@ -3,6 +3,11 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const cors = require('cors');
+const { createClient } = require('@supabase/supabase-js');
+
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_SERVICE_KEY = 'YOUR_SUPABASE_SERVICE_ROLE_KEY';
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 const app = express();
 const server = http.createServer(app);
@@ -37,6 +42,20 @@ function getChannelsList() {
   return Object.entries(channels).map(([id, ch]) => ({ id, name: ch.name, userCount: ch.users.size }));
 }
 
+// Load channels from Supabase on server start
+async function loadChannelsFromSupabase() {
+  const { data, error } = await supabase.from('channels').select('*');
+  if (data) {
+    data.forEach(ch => {
+      channels[ch.id] = { name: ch.name, users: new Set() };
+    });
+    log(`Loaded ${data.length} channels from Supabase.`);
+  } else if (error) {
+    log('Error loading channels from Supabase: ' + error.message);
+  }
+}
+loadChannelsFromSupabase();
+
 io.on('connection', (socket) => {
   log(`Client connected: ${socket.id}`);
 
@@ -50,22 +69,27 @@ io.on('connection', (socket) => {
     socket.emit('channels-list', getChannelsList());
   });
 
-  // Create a new channel
-  socket.on('create-channel', ({ name }) => {
+  // Create a new channel (persist in Supabase)
+  socket.on('create-channel', async ({ name }) => {
     const cleanName = sanitizeChannelName(name);
     if (!cleanName) {
       socket.emit('error', { message: 'Invalid channel name.' });
       return;
     }
-    // Prevent duplicate names
     if (Object.values(channels).some(ch => ch.name === cleanName)) {
       socket.emit('error', { message: 'Channel name already exists.' });
       return;
     }
-    const channelId = String(channelAutoId++);
-    channels[channelId] = { name: cleanName, users: new Set() };
+    // Insert into Supabase
+    const { data, error } = await supabase.from('channels').insert([{ name: cleanName }]).select().single();
+    if (error) {
+      socket.emit('error', { message: 'Failed to create channel.' });
+      log('Supabase error: ' + error.message);
+      return;
+    }
+    channels[data.id] = { name: data.name, users: new Set() };
     io.emit('channels-list', getChannelsList());
-    log(`Channel created: ${cleanName} (${channelId})`);
+    log(`Channel created: ${cleanName} (${data.id})`);
   });
 
   // Join a channel
