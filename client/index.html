@@ -5,46 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Corpus v2 - Voice Chat</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
 </head>
 <body>
-  <header>
-    <div class="logo">Corpus v2</div>
-    <h1>Voice Chat Room</h1>
-  </header>
-
   <main>
-    <section id="nameSelection" class="card">
-      <h2>Select Your Name</h2>
-      <select id="nameSelect" aria-label="Select your name">
-        <option value="BLAZEE HACK">BLAZEE HACK</option>
-        <option value="VELOZZZ HACK">VELOZZZ HACK</option>
-        <option value="FLAMEE HACK">FLAMEE HACK</option>
-        <option value="STEIKEE HACK">STEIKEE HACK</option>
-        <option value="RONINN HACK">RONINN HACK</option>
-      </select>
-      <button class="primary" onclick="joinChannel()">Join Channel</button>
-    </section>
-
-    <section id="voiceRoom" class="card" style="display:none;">
-      <h2>Welcome, <span id="currentUser"></span></h2>
-      <div id="participants" class="participants"></div>
-      <div class="controls">
-        <button id="micToggle" class="secondary">Toggle Mic</button>
-        <button class="danger" onclick="leave()">Leave</button>
-      </div>
+    <section class="card" style="margin-top: 80px; min-width: 320px;">
+      <div class="logo" style="margin-bottom: 24px;">Corpus v2</div>
+      <h2>Sign in to Continue</h2>
+      <button id="google-login" class="primary" style="margin-top: 32px;">
+        <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" style="height: 20px; vertical-align: middle; margin-right: 8px;"> Continue with Google
+      </button>
     </section>
   </main>
-
   <div id="toast" class="toast" style="display:none;"></div>
-  <div id="modal" class="modal" style="display:none;">
-    <div class="modal-content">
-      <span id="modal-message"></span>
-      <button onclick="closeModal()">Close</button>
-    </div>
-  </div>
+  <script>
+    // Initialize Supabase
+    const SUPABASE_URL = 'https://tlhzsssflsljvvzfyapc.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRsaHpzc3NmbHNsanZ2emZ5YXBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2MDYzOTYsImV4cCI6MjA2NDE4MjM5Nn0.-_Pp6zG2v7RiP_0m_pQOEJyAJPn5Zo4yPGCHHJH0IO0';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
-  <script src="script.js"></script>
+    const toast = document.getElementById('toast');
+    function showToast(message, duration = 3000) {
+      toast.textContent = message;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, duration);
+    }
+
+    document.getElementById('google-login').onclick = async () => {
+      const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+      if (error) {
+        showToast('Login failed: ' + error.message);
+      }
+    };
+
+    // Handle redirect after login
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session && session.user) {
+        // Store user in DB (if new)
+        const { user } = session;
+        await supabase.from('users').upsert({
+          id: user.id,
+          email: user.email,
+          name: user.user_metadata.full_name,
+          last_login: new Date().toISOString()
+        });
+        window.location.href = 'login.html'; // This will be swapped in login.html
+      }
+    });
+  </script>
 </body>
 </html>

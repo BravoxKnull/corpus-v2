@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Corpus v2 - Voice Chat</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
+  <style>
+    .footer {
+      background: #181a1b;
+      color: #aaa;
+      text-align: center;
+      padding: 18px 0 10px 0;
+      font-size: 0.95rem;
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 100;
+    }
+    @media (max-width: 600px) {
+      .footer { font-size: 0.85rem; padding: 12px 0 6px 0; }
+    }
+  </style>
+</head>
+<body>
+  <header style="background: #181a1b; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 24px 0 12px 0; text-align: center;">
+    <div class="logo" style="font-size: 2rem; font-weight: bold; color: #00e6a8; letter-spacing: 2px;">Corpus v2</div>
+    <h1 style="margin: 0; font-size: 1.5rem; font-weight: 400; color: #fff;">Voice Chat Room</h1>
+    <div id="user-info" style="margin-top: 10px;"></div>
+    <button id="logout-btn" class="danger" style="display:none; margin-top: 10px;">Logout</button>
+  </header>
+  <main style="min-height: 80vh; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+    <section id="nameSelection" class="card" style="margin-top: 40px; margin-bottom: 32px;">
+      <h2 style="margin-bottom: 18px;">Select Your Name</h2>
+      <select id="nameSelect" aria-label="Select your name" style="margin-bottom: 18px;">
+        <option value="BLAZEE HACK">BLAZEE HACK</option>
+        <option value="VELOZZZ HACK">VELOZZZ HACK</option>
+        <option value="FLAMEE HACK">FLAMEE HACK</option>
+        <option value="STEIKEE HACK">STEIKEE HACK</option>
+        <option value="RONINN HACK">RONINN HACK</option>
+      </select>
+      <button class="primary" onclick="joinChannel()" style="width: 100%; margin-bottom: 0;">Join Channel</button>
+    </section>
+    <section id="voiceRoom" class="card" style="display:none; margin-bottom: 32px;">
+      <h2 style="margin-bottom: 18px;">Welcome, <span id="currentUser"></span></h2>
+      <div id="participants" class="participants"></div>
+      <div class="controls" style="margin-top: 24px;">
+        <button id="micToggle" class="secondary">Toggle Mic</button>
+        <button class="danger" onclick="leave()">Leave</button>
+      </div>
+    </section>
+  </main>
+  <div id="toast" class="toast" style="display:none;"></div>
+  <div id="modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <span id="modal-message"></span>
+      <button onclick="closeModal()">Close</button>
+    </div>
+  </div>
+  <footer class="footer">
+    &copy; 2024 Corpus v2 &mdash; Professional Voice Chat Platform
+  </footer>
+  <script>
+    // Initialize Supabase
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Auth check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session || !session.user) {
+        window.location.href = 'index.html';
+      } else {
+        // Show user info and logout button
+        document.getElementById('user-info').textContent = session.user.email + ' (' + (session.user.user_metadata.full_name || '') + ')';
+        document.getElementById('logout-btn').style.display = 'inline-block';
+      }
+    });
+    document.getElementById('logout-btn').onclick = async () => {
+      await supabase.auth.signOut();
+      window.location.href = 'index.html';
+    };
+  </script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html> 
