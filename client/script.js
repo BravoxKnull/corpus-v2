@@ -172,9 +172,15 @@ window.leaveChannel = leaveChannel;
 
 // --- Participants & Voice Streaming ---
 socket.on('participants', async ({ participants }) => {
+    if (!participantsDiv) return;
     participantsDiv.innerHTML = '';
+    
+    // Ensure participants is an array
+    const participantsArray = Array.isArray(participants) ? participants : [];
+    
     if (!localStream) await startVoice(); // Ensure mic is ready first
-    participants.forEach(({ socketId, displayName }) => {
+    
+    participantsArray.forEach(({ socketId, displayName }) => {
         addParticipant(socketId, displayName);
         if (socketId !== socket.id && !peers[socketId]) {
             connectToNewUser(socketId, displayName, false); // Always non-initiator for existing users
@@ -183,6 +189,7 @@ socket.on('participants', async ({ participants }) => {
 });
 
 socket.on('user-joined', async ({ socketId, displayName }) => {
+    if (!participantsDiv) return;
     addParticipant(socketId, displayName, true);
     showToast(`${displayName} joined the channel`);
     if (socketId !== socket.id && !peers[socketId]) {
@@ -191,7 +198,10 @@ socket.on('user-joined', async ({ socketId, displayName }) => {
 });
 
 socket.on('user-left', ({ socketId }) => {
-    document.getElementById('p-' + socketId)?.remove();
+    const participantElement = document.getElementById('p-' + socketId);
+    if (participantElement) {
+        participantElement.remove();
+    }
     if (peers[socketId]) {
         peers[socketId].destroy();
         delete peers[socketId];
@@ -200,14 +210,18 @@ socket.on('user-left', ({ socketId }) => {
 });
 
 function addParticipant(socketId, displayName, animate = false) {
+    if (!participantsDiv) return;
     if (document.getElementById('p-' + socketId)) return;
+    
     const div = document.createElement('div');
     div.id = 'p-' + socketId;
-    div.className = animate ? 'participant-join-animate' : '';
+    div.className = 'participant' + (animate ? ' participant-join-animate' : '');
+    
     const activeCircle = document.createElement('span');
     activeCircle.className = 'active-speaker';
     activeCircle.style.visibility = 'hidden';
     activeCircle.id = 'active-' + socketId;
+    
     div.appendChild(activeCircle);
     div.appendChild(document.createTextNode(displayName));
     participantsDiv.appendChild(div);

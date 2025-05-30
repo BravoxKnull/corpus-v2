@@ -181,35 +181,37 @@
     <!-- Sidebar -->
     <div class="sidebar">
       <div class="user-profile">
-        <div class="avatar">
+        <div class="avatar" id="user-avatar">
           <span class="material-icons">person</span>
         </div>
         <div class="user-info">
-          <span id="displayName">Loading...</span>
+          <span id="user-displayname">Loading...</span>
         </div>
       </div>
       
       <div class="channels">
         <h3>Voice Channels</h3>
-        <div id="channelsList">
+        <div id="channels-list">
           <!-- Channels will be added here -->
         </div>
-        <button id="createChannelBtn" class="btn">
-          <span class="material-icons">add</span>
-          New Channel
-        </button>
+        <div class="create-channel">
+          <input type="text" id="new-channel-name" placeholder="New channel name">
+          <button id="create-channel-btn" class="btn">
+            <span class="material-icons">add</span>
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Main Content -->
     <div class="main-content">
       <div class="header">
-        <h2 id="currentChannel">Select a Channel</h2>
+        <h2 id="current-channel">Select a Channel</h2>
         <div class="controls">
           <button id="micToggle" class="btn">
             <span class="material-icons" id="micIcon">mic</span>
           </button>
-          <button id="logoutBtn" class="btn">
+          <button id="logout-btn" class="btn">
             <span class="material-icons">logout</span>
           </button>
         </div>
@@ -223,20 +225,16 @@
     </div>
   </div>
 
-  <!-- Modals -->
-  <div id="createChannelModal" class="modal">
+  <!-- Toast -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Modal -->
+  <div id="modal" class="modal">
     <div class="modal-content">
-      <h3>Create New Channel</h3>
-      <input type="text" id="channelName" placeholder="Channel Name">
-      <div class="modal-buttons">
-        <button id="createChannelConfirm" class="btn">Create</button>
-        <button id="createChannelCancel" class="btn">Cancel</button>
-      </div>
+      <p id="modal-message"></p>
+      <button onclick="closeModal()" class="btn">Close</button>
     </div>
   </div>
-
-  <!-- Toast Container -->
-  <div id="toastContainer"></div>
 
   <!-- Scripts -->
   <script src="/socket.io/socket.io.js"></script>
