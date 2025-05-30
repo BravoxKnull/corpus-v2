@@ -7,25 +7,40 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>DUNE PC</h1>
+  <header>
+    <div class="logo">Corpus v2</div>
+    <h1>Voice Chat Room</h1>
+  </header>
 
-  <div id="nameSelection">
-    <h2>Select Your Name</h2>
-    <select id="nameSelect">
-      <option value="BLAZEE HACK">BLAZEE HACK</option>
-      <option value="VELOZZZ HACK">VELOZZZ HACK</option>
-      <option value="FLAMEE HACK">FLAMEE HACK</option>
-      <option value="STEIKEE HACK">STEIKEE HACK</option>
-      <option value="RONINN HACK">RONINN HACK</option>
-    </select>
-    <button onclick="joinChannel()">Join Channel</button>
-  </div>
+  <main>
+    <section id="nameSelection" class="card">
+      <h2>Select Your Name</h2>
+      <select id="nameSelect" aria-label="Select your name">
+        <option value="BLAZEE HACK">BLAZEE HACK</option>
+        <option value="VELOZZZ HACK">VELOZZZ HACK</option>
+        <option value="FLAMEE HACK">FLAMEE HACK</option>
+        <option value="STEIKEE HACK">STEIKEE HACK</option>
+        <option value="RONINN HACK">RONINN HACK</option>
+      </select>
+      <button class="primary" onclick="joinChannel()">Join Channel</button>
+    </section>
 
-  <div id="voiceRoom" style="display:none;">
-    <h2>You are in: <span id="currentUser"></span></h2>
-    <div id="participants"></div>
-    <button id="micToggle">Toggle Mic</button>
-    <button onclick="leave()">Leave</button>
+    <section id="voiceRoom" class="card" style="display:none;">
+      <h2>Welcome, <span id="currentUser"></span></h2>
+      <div id="participants" class="participants"></div>
+      <div class="controls">
+        <button id="micToggle" class="secondary">Toggle Mic</button>
+        <button class="danger" onclick="leave()">Leave</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" style="display:none;"></div>
+  <div id="modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <span id="modal-message"></span>
+      <button onclick="closeModal()">Close</button>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

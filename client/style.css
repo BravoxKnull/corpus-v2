@@ -1,23 +1,182 @@
 body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-    padding: 20px;
-    background: #121212;
-    color: #fff;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: linear-gradient(135deg, #232526 0%, #414345 100%);
+  color: #f4f4f4;
+  margin: 0;
+  min-height: 100vh;
+}
+
+header {
+  background: #181a1b;
+  padding: 24px 0 12px 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  text-align: center;
+}
+.logo {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #00e6a8;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: #fff;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 40px;
+}
+
+.card {
+  background: #23272a;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+  padding: 32px 24px;
+  margin-bottom: 32px;
+  min-width: 320px;
+  max-width: 90vw;
+}
+
+select, button {
+  padding: 12px 18px;
+  margin: 12px 0;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+}
+select {
+  width: 100%;
+  background: #181a1b;
+  color: #fff;
+  border: 1px solid #333;
+}
+button.primary {
+  background: #00e6a8;
+  color: #181a1b;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+button.primary:hover {
+  background: #00b386;
+}
+button.secondary {
+  background: #23272a;
+  color: #00e6a8;
+  border: 1px solid #00e6a8;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: background 0.2s, color 0.2s;
+}
+button.secondary:hover {
+  background: #00e6a8;
+  color: #23272a;
+}
+button.danger {
+  background: #ff4d4f;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+button.danger:hover {
+  background: #d9363e;
+}
+
+.controls {
+  margin-top: 24px;
+}
+
+.participants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+  margin: 24px 0 0 0;
+}
+.participants div {
+  background: #181a1b;
+  border-radius: 10px;
+  padding: 12px 16px;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+}
+.participants audio {
+  margin-top: 8px;
+  width: 100px;
+}
+.active-talker {
+  border: 2px solid #00e6a8;
+  box-shadow: 0 0 8px #00e6a8;
+}
+
+/* Toast styles */
+.toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #23272a;
+  color: #fff;
+  padding: 16px 32px;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+  font-size: 1rem;
+  z-index: 1000;
+  opacity: 0.95;
+  transition: opacity 0.3s;
+}
+
+/* Modal styles */
+.modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.modal-content {
+  background: #23272a;
+  padding: 32px 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+  color: #fff;
+  text-align: center;
+}
+.modal-content button {
+  margin-top: 16px;
+  background: #00e6a8;
+  color: #181a1b;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 24px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .card {
+    min-width: 90vw;
+    padding: 18px 6vw;
   }
-  
-  select, button {
-    padding: 10px;
-    margin: 10px;
-    font-size: 16px;
+  .participants div {
+    min-width: 90px;
+    padding: 8px 6px;
   }
-  
-  #participants {
-    margin: 20px;
+  .participants audio {
+    width: 70px;
   }
-  
-  .active-talker {
-    border: 2px solid lime;
-    padding: 5px;
-  }
+}
   
