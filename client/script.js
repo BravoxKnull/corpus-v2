@@ -125,12 +125,10 @@ socket.on('participants', ({ participants }) => {
     if (socketId !== socket.id && !peers[socketId]) {
       // Only create peer if my socket.id > theirs (initiator)
       if (socket.id > socketId) {
-        console.log(`[PEER] Creating initiator peer: me (${socket.id}) > them (${socketId})`);
         connectToNewUser(socketId, displayName, true);
       }
     }
   });
-  // Start voice if not already
   if (!localStream) startVoice();
 });
 
@@ -139,7 +137,6 @@ socket.on('user-joined', ({ socketId, displayName }) => {
   showToast(`${displayName} joined the channel`);
   // Only create peer if my socket.id < theirs (initiator)
   if (socketId !== socket.id && !peers[socketId] && socket.id < socketId) {
-    console.log(`[PEER] Creating initiator peer: me (${socket.id}) < them (${socketId})`);
     connectToNewUser(socketId, displayName, true);
   }
 });
@@ -150,7 +147,6 @@ socket.on('user-left', ({ socketId }) => {
     peers[socketId].destroy();
     delete peers[socketId];
     delete peerStreams[socketId];
-    console.log(`[PEER] Destroyed peer for ${socketId}`);
   }
 });
 
@@ -210,16 +206,13 @@ function detectSpeaking(stream, socketId) {
 
 socket.on('signal', ({ id, signal }) => {
   if (!peers[id]) {
-    // Always use socket.id comparison to determine initiator
+    // Use the same rule to determine initiator
     const initiator = socket.id > id;
-    console.log(`[SIGNAL] Creating peer for signal: me (${socket.id}) ${initiator ? '>' : '<'} them (${id}), initiator: ${initiator}`);
     connectToNewUser(id, '', initiator);
   }
-  // Only signal if peer exists and not in stable state
   if (peers[id]) {
     try {
       peers[id].signal(signal);
-      console.log(`[SIGNAL] Signaled peer ${id}`);
     } catch (e) {
       console.warn(`[SIGNAL] Error signaling peer ${id}:`, e);
     }
@@ -232,6 +225,14 @@ function connectToNewUser(id, displayName, initiator) {
     initiator,
     trickle: false,
     stream: localStream,
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+      ]
+    }
   });
   peer.on('signal', signal => {
     socket.emit('signal', { targetId: id, signal });
@@ -247,7 +248,6 @@ function connectToNewUser(id, displayName, initiator) {
     }
     audio.srcObject = stream;
     peerStreams[id] = stream;
-    // Detect speaking for remote user
     detectSpeaking(stream, id);
   });
   peer.on('close', () => {
